@@ -1,0 +1,5 @@
+{
+  "enabled": false,
+  "contacts": [{"name": "Your Name", "method": "email:you@example.com", "threshold": 3}],
+  "cooldown_frames": 9000
+}

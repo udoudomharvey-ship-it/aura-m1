@@ -1,0 +1,450 @@
+#!/usr/bin/env bash
+# Run from the ROOT of your aura-m1 project.
+#   bash setup_escalation_ui.sh
+#
+# Adds frontend/aura-m1-escalation-setup.html — a settings screen for
+# configuring tiered escalation contacts (name, phone/email, and how
+# many unresolved recommendations trigger notifying them). It exports
+# a JSON file in exactly the shape EscalationConfig.load() expects in
+# aura_sdk/recommend/escalate.py, and can re-import a previously saved
+# one to edit it. Matches your existing HEMM Cognitive Core visual
+# system (frontend/aura-m1-app.html) exactly — same palette, same type.
+
+set -euo pipefail
+
+mkdir -p frontend
+
+echo "Creating frontend/aura-m1-escalation-setup.html ..."
+cat > frontend/aura-m1-escalation-setup.html << 'AURA_EOF_ESCUI'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HEMM Cognitive Core — Check-in contacts</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#05070a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #05070a; --panel: #0e1216; --panel-2: #131820; --border: #232a33;
+    --text: #E9EDEA; --muted: #8A9490; --signal: #6FFFB0; --alert: #FF5C4D;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text); min-height: 100%;
+    font-family: 'IBM Plex Mono', monospace; -webkit-font-smoothing: antialiased;
+  }
+  h1, h2 { font-family: 'Space Grotesk', sans-serif; margin: 0; }
+
+  .page { max-width: 640px; margin: 0 auto; padding: 28px 20px 80px; }
+
+  .topbar { display: flex; align-items: baseline; gap: 10px; padding-bottom: 22px;
+            border-bottom: 1px solid var(--border); margin-bottom: 28px; }
+  .brand .mark { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 15px; }
+  .brand .mark span { color: var(--signal); }
+  .brand .tagline { color: var(--muted); font-size: 11px; }
+
+  h1 { font-size: 24px; font-weight: 600; line-height: 1.3; }
+  .lede { color: var(--muted); font-size: 13px; line-height: 1.6; margin-top: 10px; max-width: 52ch; }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+          padding: 20px; margin-top: 20px; }
+
+  .master-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .master-row .label { font-size: 14px; font-weight: 500; }
+  .master-row .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+  .switch { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; inset: 0; background: var(--panel-2); border: 1px solid var(--border);
+            border-radius: 24px; cursor: pointer; transition: .15s; }
+  .slider::before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 50%;
+                     transform: translateY(-50%); background: var(--muted); border-radius: 50%; transition: .15s; }
+  input:checked + .slider { border-color: var(--signal); }
+  input:checked + .slider::before { transform: translate(18px, -50%); background: var(--signal); }
+
+  #chainSection { margin-top: 20px; transition: opacity .15s; }
+  #chainSection[data-disabled="true"] { opacity: .4; pointer-events: none; }
+
+  .section-label { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+
+  .contact { display: grid; grid-template-columns: 28px 1fr; gap: 12px; margin-bottom: 12px; }
+  .tier-badge { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border);
+                display: flex; align-items: center; justify-content: center; font-size: 12px;
+                color: var(--muted); margin-top: 4px; }
+  .contact-fields { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .field-row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .field-row:last-child { margin-bottom: 0; }
+  .field { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 10px; color: var(--muted); }
+  .field input, .field select {
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: var(--bg);
+    color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 7px 8px;
+    width: 100%;
+  }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--signal); }
+  .field.threshold { max-width: 130px; }
+  .remove-btn { align-self: flex-start; background: none; border: none; color: var(--muted);
+                cursor: pointer; font-size: 11px; padding: 6px 0 0; }
+  .remove-btn:hover { color: var(--alert); }
+
+  .add-btn {
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: var(--panel-2);
+    color: var(--text); border: 1px dashed var(--border); border-radius: 8px; padding: 10px;
+    width: 100%; cursor: pointer; margin-top: 4px;
+  }
+  .add-btn:hover { border-color: var(--signal); color: var(--signal); }
+
+  .cooldown-row { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+                  margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .cooldown-row .label { font-size: 13px; }
+  .cooldown-row .sub { color: var(--muted); font-size: 11px; margin-top: 3px; }
+  .cooldown-input { display: flex; align-items: center; gap: 6px; }
+  .cooldown-input input { width: 60px; text-align: right; }
+
+  #chainPreview { margin-top: 20px; padding: 14px 16px; background: var(--bg);
+                  border: 1px solid var(--border); border-radius: 8px; font-size: 12px;
+                  color: var(--muted); line-height: 1.7; }
+  #chainPreview .step { color: var(--text); }
+  #chainPreview .empty { color: var(--muted); }
+
+  #warning { display: none; margin-top: 14px; padding: 10px 14px; border-radius: 8px;
+             background: rgba(255, 92, 77, 0.1); border: 1px solid var(--alert);
+             color: var(--alert); font-size: 12px; }
+  #warning.show { display: block; }
+
+  .actions { display: flex; gap: 10px; margin-top: 24px; flex-wrap: wrap; }
+  button.primary, button.secondary {
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; border-radius: 7px;
+    padding: 11px 18px; cursor: pointer;
+  }
+  button.primary { background: var(--signal); color: #05070a; border: 1px solid var(--signal); font-weight: 600; }
+  button.primary:hover { opacity: .9; }
+  button.primary:disabled { background: var(--panel-2); color: var(--muted); border-color: var(--border); cursor: not-allowed; }
+  button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  button.secondary:hover { border-color: var(--signal); color: var(--signal); }
+  input[type=file] { display: none; }
+
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+           background: var(--panel); border: 1px solid var(--signal); color: var(--signal);
+           padding: 10px 18px; border-radius: 8px; font-size: 12px; opacity: 0; transition: .2s;
+           pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 480px) {
+    .field-row { flex-direction: column; }
+    .field.threshold { max-width: none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="mark">HEMM <span>Cognitive Core</span></div>
+      <div class="tagline">Check-in contacts</div>
+    </div>
+  </div>
+
+  <h1>Who should we check in with, if breaks keep not helping?</h1>
+  <p class="lede">
+    This is off by default. Aura-M1 only reaches out to someone else if
+    you turn it on and add at least one contact below — it never guesses
+    or picks anyone on its own.
+  </p>
+
+  <div class="card">
+    <div class="master-row">
+      <div>
+        <div class="label">Check in with someone</div>
+        <div class="sub">Only after your own recommended breaks haven't helped, several times in a row</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="enabledToggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div id="chainSection" data-disabled="true">
+      <div class="section-label" style="margin-top:20px;">Contacts, in order</div>
+      <div id="contactList"></div>
+      <button class="add-btn" id="addContactBtn" type="button">+ Add a contact</button>
+
+      <div class="cooldown-row">
+        <div>
+          <div class="label">Minimum time between check-ins</div>
+          <div class="sub">Stops the same contact being notified back-to-back</div>
+        </div>
+        <div class="cooldown-input">
+          <input type="number" id="cooldownMinutes" min="1" value="5">
+          <span class="sub">min</span>
+        </div>
+      </div>
+
+      <div id="chainPreview"></div>
+      <div id="warning"></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="saveBtn" type="button">Save contacts</button>
+    <button class="secondary" id="importBtn" type="button">Import saved file</button>
+    <input type="file" id="importInput" accept="application/json">
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  const FPS = 30; // matches PipelineConfig.frame_dt_ms default (33.3ms ≈ 30fps)
+
+  const state = {
+    enabled: false,
+    contacts: [],   // { name, method, threshold }
+    cooldownMinutes: 5,
+  };
+
+  const el = {
+    enabledToggle: document.getElementById('enabledToggle'),
+    chainSection: document.getElementById('chainSection'),
+    contactList: document.getElementById('contactList'),
+    addContactBtn: document.getElementById('addContactBtn'),
+    cooldownMinutes: document.getElementById('cooldownMinutes'),
+    chainPreview: document.getElementById('chainPreview'),
+    warning: document.getElementById('warning'),
+    saveBtn: document.getElementById('saveBtn'),
+    importBtn: document.getElementById('importBtn'),
+    importInput: document.getElementById('importInput'),
+    toast: document.getElementById('toast'),
+  };
+
+  function addContact(contact) {
+    state.contacts.push(contact || { name: '', method: '', threshold: state.contacts.length ? '' : 3 });
+    render();
+  }
+
+  function removeContact(index) {
+    state.contacts.splice(index, 1);
+    render();
+  }
+
+  function methodPlaceholder(kind) {
+    return kind === 'email' ? 'name@example.com' : '+1 555 010 0100';
+  }
+
+  function renderContactRow(contact, index) {
+    const row = document.createElement('div');
+    row.className = 'contact';
+
+    const badge = document.createElement('div');
+    badge.className = 'tier-badge';
+    badge.textContent = index + 1;
+    row.appendChild(badge);
+
+    const fields = document.createElement('div');
+    fields.className = 'contact-fields';
+
+    const kind = contact.method.startsWith('email:') ? 'email'
+               : contact.method.startsWith('sms:')   ? 'sms'
+               : 'sms';
+    const methodValue = contact.method.includes(':') ? contact.method.split(':').slice(1).join(':') : contact.method;
+
+    fields.innerHTML = `
+      <div class="field-row">
+        <div class="field">
+          <label>Name</label>
+          <input type="text" data-field="name" placeholder="e.g. Amaka" value="${escapeAttr(contact.name)}">
+        </div>
+        <div class="field threshold">
+          <label>Notify after</label>
+          <input type="number" data-field="threshold" min="1" value="${escapeAttr(contact.threshold)}">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field" style="max-width:110px;">
+          <label>Method</label>
+          <select data-field="kind">
+            <option value="sms" ${kind === 'sms' ? 'selected' : ''}>Text</option>
+            <option value="email" ${kind === 'email' ? 'selected' : ''}>Email</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>${kind === 'email' ? 'Email address' : 'Phone number'}</label>
+          <input type="text" data-field="methodValue" placeholder="${methodPlaceholder(kind)}" value="${escapeAttr(methodValue)}">
+        </div>
+      </div>
+      <button class="remove-btn" type="button">Remove this contact</button>
+    `;
+
+    fields.querySelector('[data-field="name"]').addEventListener('input', e => {
+      contact.name = e.target.value; renderPreviewOnly();
+    });
+    fields.querySelector('[data-field="threshold"]').addEventListener('input', e => {
+      contact.threshold = e.target.value === '' ? '' : parseInt(e.target.value, 10);
+      renderPreviewOnly();
+    });
+    fields.querySelector('[data-field="kind"]').addEventListener('change', e => {
+      const val = fields.querySelector('[data-field="methodValue"]').value;
+      contact.method = e.target.value + ':' + val;
+      render();
+    });
+    fields.querySelector('[data-field="methodValue"]').addEventListener('input', e => {
+      contact.method = kind + ':' + e.target.value; renderPreviewOnly();
+    });
+    fields.querySelector('.remove-btn').addEventListener('click', () => removeContact(index));
+
+    row.appendChild(fields);
+    return row;
+  }
+
+  function escapeAttr(v) {
+    return String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  }
+
+  // ── Validation ────────────────────────────────────────────────────────
+  // Mirrors EscalationConfig.validate() in aura_sdk/recommend/escalate.py:
+  // enabling requires at least one contact, and thresholds must be
+  // strictly ascending so each tier only fires once, in order.
+
+  function validate() {
+    if (!state.enabled) return { ok: true, sortedContacts: state.contacts };
+    if (state.contacts.length === 0) {
+      return { ok: false, message: 'Turn this on and add at least one contact, or leave it off.' };
+    }
+    for (const c of state.contacts) {
+      if (!c.name.trim()) return { ok: false, message: 'Every contact needs a name.' };
+      const methodVal = c.method.includes(':') ? c.method.split(':').slice(1).join(':') : '';
+      if (!methodVal.trim()) return { ok: false, message: 'Every contact needs a phone number or email.' };
+      if (!c.threshold || c.threshold < 1) return { ok: false, message: 'Every contact needs a "notify after" number of 1 or more.' };
+    }
+    const sorted = [...state.contacts].sort((a, b) => a.threshold - b.threshold);
+    const thresholds = sorted.map(c => c.threshold);
+    for (let i = 1; i < thresholds.length; i++) {
+      if (thresholds[i] === thresholds[i - 1]) {
+        return { ok: false, message: 'Two contacts can\'t have the same "notify after" number — give each a different one.' };
+      }
+    }
+    return { ok: true, sortedContacts: sorted };
+  }
+
+  function renderPreviewOnly() {
+    const result = validate();
+    if (!result.ok) {
+      el.warning.textContent = result.message;
+      el.warning.classList.add('show');
+      el.saveBtn.disabled = true;
+      el.chainPreview.innerHTML = '<span class="empty">Fix the contact above to see the check-in order.</span>';
+      return;
+    }
+    el.warning.classList.remove('show');
+    el.saveBtn.disabled = !state.enabled && state.contacts.length === 0 ? false : false;
+
+    if (!state.enabled) {
+      el.chainPreview.innerHTML = '<span class="empty">Check-ins are off. Aura-M1 will only ever notify you.</span>';
+      return;
+    }
+    if (state.contacts.length === 0) {
+      el.chainPreview.innerHTML = '<span class="empty">Add a contact above to see how this will work.</span>';
+      return;
+    }
+    const lines = result.sortedContacts.map((c, i) => {
+      const methodVal = c.method.split(':').slice(1).join(':');
+      return `<div class="step">${i + 1}. After ${c.threshold} breaks in a row that didn't help, notify <strong>${escapeAttr(c.name)}</strong> (${escapeAttr(methodVal)})</div>`;
+    });
+    el.chainPreview.innerHTML = lines.join('');
+  }
+
+  function render() {
+    el.chainSection.dataset.disabled = state.enabled ? 'false' : 'true';
+    el.contactList.innerHTML = '';
+    state.contacts.forEach((c, i) => el.contactList.appendChild(renderContactRow(c, i)));
+    renderPreviewOnly();
+  }
+
+  function showToast(message) {
+    el.toast.textContent = message;
+    el.toast.classList.add('show');
+    setTimeout(() => el.toast.classList.remove('show'), 2200);
+  }
+
+  // ── Save / Import ────────────────────────────────────────────────────
+  // Exports/reads exactly the shape EscalationConfig.to_dict()/from_dict()
+  // in aura_sdk/recommend/escalate.py expect, so a saved file here can be
+  // loaded directly with EscalationConfig.load(path) in Python.
+
+  el.saveBtn.addEventListener('click', () => {
+    const result = validate();
+    if (!result.ok) { renderPreviewOnly(); return; }
+
+    const config = {
+      enabled: state.enabled,
+      contacts: state.enabled
+        ? result.sortedContacts.map(c => ({ name: c.name.trim(), method: c.method, threshold: c.threshold }))
+        : [],
+      cooldown_frames: Math.round(parseFloat(el.cooldownMinutes.value || '5') * 60 * FPS),
+    };
+
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'escalation_config.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('Saved escalation_config.json');
+  });
+
+  el.importBtn.addEventListener('click', () => el.importInput.click());
+
+  el.importInput.addEventListener('change', () => {
+    const file = el.importInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        state.enabled = !!data.enabled;
+        state.contacts = (data.contacts || []).map(c => ({
+          name: c.name || '', method: c.method || 'sms:', threshold: c.threshold || 1,
+        }));
+        state.cooldownMinutes = Math.round((data.cooldown_frames || 9000) / 60 / FPS);
+        el.enabledToggle.checked = state.enabled;
+        el.cooldownMinutes.value = state.cooldownMinutes;
+        render();
+        showToast('Loaded ' + file.name);
+      } catch (e) {
+        showToast('Could not read that file — is it a valid escalation config?');
+      }
+    };
+    reader.readAsText(file);
+    el.importInput.value = '';
+  });
+
+  el.enabledToggle.addEventListener('change', e => {
+    state.enabled = e.target.checked;
+    if (state.enabled && state.contacts.length === 0) addContact();
+    render();
+  });
+
+  el.addContactBtn.addEventListener('click', () => addContact());
+  el.cooldownMinutes.addEventListener('input', renderPreviewOnly);
+
+  render();
+})();
+</script>
+</body>
+</html>
+AURA_EOF_ESCUI
+
+echo ""
+echo "Done. Open frontend/aura-m1-escalation-setup.html directly in a"
+echo "browser to try it (no server needed — it's a self-contained file)."

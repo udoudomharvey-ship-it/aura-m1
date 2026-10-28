@@ -1,0 +1,29 @@
+[package]
+name        = "aura_core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Aura-M1 Rust performance core — NCL, HEMM entropy, BNN inference, harvesting"
+# entropy_bench.rs depends on `criterion`, which was never added below (see
+# note at bottom of this file — left disabled pending a Rust upgrade).
+# Without this, `cargo test/check/clippy --all-targets` fails to build
+# because Cargo auto-discovers everything under benches/ by default,
+# regardless of the commented-out [[bench]] section. Re-enable both once
+# criterion is actually wired up.
+autobenches = false
+
+[lib]
+name    = "aura_core"
+crate-type = ["rlib", "cdylib"]   # rlib for firmware, cdylib for PyO3
+
+[dependencies]
+# No external runtime dependencies — zero-overhead principle
+# serde for weight serialisation only
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"
+
+[dev-dependencies]
+
+# [[bench]]
+# name    = "entropy_bench"
+# harness = false  # enable after Rust upgrade

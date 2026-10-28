@@ -1,0 +1,33 @@
+[package]
+name        = "aura_firmware"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Aura-M1 bare-metal firmware — no_std, no heap, deterministic"
+
+[[bin]]
+name = "aura_firmware"
+path = "src/main.rs"
+
+[dependencies]
+# NOTE: aura_core is deliberately NOT a dependency here, despite being
+# referenced in doc comments throughout main.rs for documentation purposes
+# (e.g. "mirrors aura_core::hemm::HemmWindow exactly"). An audit for real
+# ARM cross-compilation found aura_core was previously declared as a
+# dependency here but never actually `use`d anywhere in this file — and
+# since Cargo compiles every declared dependency regardless of whether it's
+# referenced, that declaration would have broken a genuine `--target
+# thumbv6m-none-eabi` build, because aura_core uses `std::f32` and
+# `std::fmt` unconditionally and has no no_std support. Firmware is
+# deliberately self-contained instead (see HemmWindowEmbedded's doc
+# comment) — this is a known architectural gap, not an oversight: a real
+# embedded target needs one shared no_std-compatible constants/math crate
+# eventually, so firmware and aura_core stop needing to be manually kept
+# in sync via comments and checksummed literals.
+
+# Panic handler for no_std
+panic-halt = "0.2"
+
+[features]
+default = []
+

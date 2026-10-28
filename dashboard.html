@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Aura-M1 Live Monitor</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --panel: #11161f;
+    --border: #232a38;
+    --text: #e8ecf3;
+    --text-dim: #7c8598;
+    --green: #2fd47a;
+    --amber: #f5a623;
+    --red: #e5484d;
+    --blue: #4a9eff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 24px;
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 20px;
+  }
+  .header h1 { font-size: 22px; font-weight: 600; margin: 0; }
+  .header .meta { color: var(--text-dim); font-size: 13px; }
+  .grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr 1fr;
+    gap: 16px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .panel h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    margin: 0 0 14px 0;
+    font-weight: 600;
+  }
+  .scenario-banner {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+  }
+  .scenario-name { font-size: 20px; font-weight: 600; }
+  .badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: 10px;
+  }
+  .badge.working { background: rgba(47,212,122,0.15); color: var(--green); }
+  .badge.known_limitation { background: rgba(245,166,35,0.15); color: var(--amber); }
+  .scenario-note { color: var(--text-dim); font-size: 13px; max-width: 480px; text-align: right; }
+  .qhci-big {
+    font-size: 56px;
+    font-weight: 700;
+    line-height: 1;
+    margin: 8px 0;
+  }
+  .alert-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .alert-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--text-dim);
+  }
+  .alert-dot.active {
+    background: var(--red);
+    box-shadow: 0 0 8px var(--red);
+    animation: pulse 1s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .bar-row { margin-bottom: 12px; }
+  .bar-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+  .bar-label .val { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .bar-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.15s linear; }
+  .rec-panel { min-height: 90px; }
+  .rec-empty { color: var(--text-dim); font-size: 13px; font-style: italic; }
+  .rec-action { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .rec-why { color: var(--text-dim); font-size: 13px; }
+  .bandit-class { margin-bottom: 14px; }
+  .bandit-class-name { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .bandit-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+  .bandit-row.leading { color: var(--blue); font-weight: 600; }
+  .escalation-stat { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .escalation-stat .n { font-size: 24px; font-weight: 700; }
+  .events {
+    grid-column: 1 / -1;
+    max-height: 160px;
+    overflow-y: auto;
+    font-size: 13px;
+    font-family: ui-monospace, monospace;
+  }
+  .event-row { padding: 4px 0; border-bottom: 1px solid var(--border); color: var(--text-dim); }
+  .event-row .frame { color: var(--blue); margin-right: 10px; }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+    background: var(--green); margin-right: 6px;
+  }
+  .status-dot.stale { background: var(--red); }
+  .controls {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .controls .label { color: var(--text-dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 6px; }
+  .ctrl-btn {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .ctrl-btn:hover { border-color: var(--blue); }
+  .ctrl-btn.active { background: rgba(74,158,255,0.15); border-color: var(--blue); color: var(--blue); }
+  .ctrl-btn.auto-btn.active { background: rgba(47,212,122,0.15); border-color: var(--green); color: var(--green); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Aura-M1 live cognitive monitor</h1>
+  <div class="meta">
+    <span id="conn-status"><span class="status-dot" id="conn-dot"></span>frame <span id="frame-idx">--</span></span>
+  </div>
+</div>
+
+<div class="grid">
+
+  <div class="panel controls">
+    <span class="label">Live control</span>
+    <button class="ctrl-btn" id="btn-cognitive_overload" onclick="trigger('cognitive_overload')">Cognitive overload</button>
+    <button class="ctrl-btn" id="btn-spatial_restlessness" onclick="trigger('spatial_restlessness')">Spatial restlessness</button>
+    <button class="ctrl-btn" id="btn-sustained_low_quality" onclick="trigger('sustained_low_quality')">Sustained low quality</button>
+    <button class="ctrl-btn auto-btn" id="btn-auto" onclick="trigger('auto')">Resume auto-cycle</button>
+  </div>
+
+  <div class="panel scenario-banner">
+    <div>
+      <span class="scenario-name" id="scenario-name">--</span>
+      <span class="badge" id="scenario-badge"></span>
+    </div>
+    <div class="scenario-note" id="scenario-note"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Q_HCI &amp; alert</h2>
+    <div class="qhci-big" id="qhci-val">--</div>
+    <div style="color: var(--text-dim); font-size: 13px;">BNN state: <span id="bnn-state">--</span> / 5</div>
+    <div class="alert-row">
+      <div class="alert-dot" id="alert-dot"></div>
+      <span id="alert-label" style="font-size: 13px;">no alert</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Entropy features</h2>
+    <div class="bar-row">
+      <div class="bar-label"><span>H_sp (spatial)</span><span class="val" id="hsp-val">--</span></div>
+      <div class="bar-track"><div class="bar-fill" id="hsp-bar" style="background: var(--blue); width:0%"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label"><span>H_te (temporal)</span><span class="val" id="hte-val">--</span></div>
+      <div class="bar-track"><div class="bar-fill" id="hte-bar" style="background: var(--amber); width:0%"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label"><span>H_in (inter-joint)</span><span class="val" id="hin-val">--</span></div>
+      <div class="bar-track"><div class="bar-fill" id="hin-bar" style="background: var(--red); width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="panel rec-panel">
+    <h2>Current recommendation</h2>
+    <div id="rec-content"><span class="rec-empty">No recommendation active</span></div>
+  </div>
+
+  <div class="panel">
+    <h2>Bandit personalization (live)</h2>
+    <div id="bandit-content"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Escalation</h2>
+    <div class="escalation-stat">
+      <span style="color: var(--text-dim); font-size: 13px;">Unresolved streak</span>
+      <span class="n" id="escalation-streak">0</span>
+    </div>
+    <div style="color: var(--text-dim); font-size: 13px;" id="escalation-enabled"></div>
+  </div>
+
+  <div class="panel events">
+    <h2>Event log</h2>
+    <div id="events-content"></div>
+  </div>
+
+</div>
+
+<script>
+const ACTION_LABELS = {}; // filled in as we see actions, for stable ordering
+
+function pct(v, max) {
+  return Math.max(0, Math.min(100, (v / max) * 100));
+}
+
+async function trigger(scenario) {
+  try {
+    await fetch('/trigger?scenario=' + scenario, { method: 'POST' });
+  } catch (e) {
+    // next poll will show conn-dot as stale if the server is actually down
+  }
+}
+
+function updateControlButtons(data) {
+  const ids = ['cognitive_overload', 'spatial_restlessness', 'sustained_low_quality'];
+  ids.forEach(id => {
+    const btn = document.getElementById('btn-' + id);
+    btn.classList.toggle('active', data.mode === 'manual' && data.target_scenario === id);
+  });
+  document.getElementById('btn-auto').classList.toggle('active', data.mode === 'auto');
+}
+
+function render(data) {
+  document.getElementById('frame-idx').textContent = data.frame_idx;
+  document.getElementById('conn-dot').classList.remove('stale');
+  updateControlButtons(data);
+
+  document.getElementById('scenario-name').textContent = data.target_scenario.replace(/_/g, ' ');
+  const badge = document.getElementById('scenario-badge');
+  badge.textContent = data.scenario_status.status === 'working' ? 'verified working' : 'known limitation';
+  badge.className = 'badge ' + data.scenario_status.status;
+  document.getElementById('scenario-note').textContent = data.scenario_status.note;
+
+  document.getElementById('qhci-val').textContent = data.q_hci.toFixed(3);
+  document.getElementById('qhci-val').style.color =
+    data.q_hci > 0.6 ? 'var(--green)' : data.q_hci > 0.3 ? 'var(--amber)' : 'var(--red)';
+  document.getElementById('bnn-state').textContent = data.bnn_state;
+
+  const alertDot = document.getElementById('alert-dot');
+  const alertLabel = document.getElementById('alert-label');
+  alertDot.classList.toggle('active', data.alert);
+  alertLabel.textContent = data.alert ? 'ALERT' : 'no alert';
+  alertLabel.style.color = data.alert ? 'var(--red)' : 'var(--text-dim)';
+
+  document.getElementById('hsp-val').textContent = data.entropy.h_sp.toFixed(3);
+  document.getElementById('hte-val').textContent = data.entropy.h_te.toFixed(3);
+  document.getElementById('hin-val').textContent = data.entropy.h_in.toFixed(3);
+  document.getElementById('hsp-bar').style.width = pct(data.entropy.h_sp, 4) + '%';
+  document.getElementById('hte-bar').style.width = pct(data.entropy.h_te, 4) + '%';
+  document.getElementById('hin-bar').style.width = pct(data.entropy.h_in, 8) + '%';
+
+  const recContent = document.getElementById('rec-content');
+  if (data.current_recommendation) {
+    const r = data.current_recommendation;
+    recContent.innerHTML =
+      '<div class="rec-action">' + r.action + '</div>' +
+      '<div class="rec-why">' + r.why + ' (' + r.problem_class.replace(/_/g, ' ') + ')</div>';
+  } else {
+    recContent.innerHTML = '<span class="rec-empty">No recommendation active</span>';
+  }
+
+  const banditContent = document.getElementById('bandit-content');
+  let banditHtml = '';
+  for (const [pc, rows] of Object.entries(data.bandit)) {
+    banditHtml += '<div class="bandit-class"><div class="bandit-class-name">' + pc.replace(/_/g, ' ') + '</div>';
+    rows.forEach((row, i) => {
+      const [action, mean] = row;
+      banditHtml += '<div class="bandit-row' + (i === 0 ? ' leading' : '') + '">' +
+        '<span>' + action + '</span><span>' + mean.toFixed(3) + '</span></div>';
+    });
+    banditHtml += '</div>';
+  }
+  banditContent.innerHTML = banditHtml;
+
+  document.getElementById('escalation-streak').textContent = data.escalation.unresolved_streak;
+  document.getElementById('escalation-enabled').textContent =
+    data.escalation.enabled ? 'Escalation enabled' : 'Escalation disabled';
+
+  const eventsContent = document.getElementById('events-content');
+  eventsContent.innerHTML = data.events.map(e =>
+    '<div class="event-row"><span class="frame">#' + e.frame_idx + '</span>' + e.text + '</div>'
+  ).join('');
+}
+
+async function poll() {
+  try {
+    const res = await fetch('/dashboard_state.json?t=' + Date.now());
+    if (res.ok) {
+      const data = await res.json();
+      render(data);
+    }
+  } catch (e) {
+    document.getElementById('conn-dot').classList.add('stale');
+  }
+  setTimeout(poll, 200);
+}
+
+poll();
+</script>
+
+</body>
+</html>

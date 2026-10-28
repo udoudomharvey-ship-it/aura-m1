@@ -1,0 +1,268 @@
+{
+  "description": "BNN cross-language golden vectors using the canonical model (models/aura_m1_bnn_v1.json). Coverage is exhaustive over all 8 possible quantised input combinations plus boundary and extreme cases -- see this script's module docstring for why only 4 of 5 states are reachable with the current placeholder weights.",
+  "model_checksum": "21dd738f",
+  "model_version": "1.3.0",
+  "alert_threshold": 0.42,
+  "cases": [
+    {
+      "name": "quantised_cell_0_lololo",
+      "input": {
+        "h_sp": 0.3,
+        "h_te": 0.3,
+        "h_in": 0.3
+      },
+      "expected": {
+        "state": 5,
+        "q_hci": 0.9997042021932243,
+        "logits": [
+          1.3695392588770487,
+          -26.476530824683127,
+          -29.356044508348404,
+          -21.335709660350368,
+          9.495077839614762
+        ],
+        "alert": false
+      }
+    },
+    {
+      "name": "quantised_cell_1_lolohi",
+      "input": {
+        "h_sp": 0.3,
+        "h_te": 0.3,
+        "h_in": 0.7
+      },
+      "expected": {
+        "state": 5,
+        "q_hci": 0.9999999007415297,
+        "logits": [
+          -2.6304607411229513,
+          -26.476530824683127,
+          -29.356044508348404,
+          -17.335709660350368,
+          13.495077839614762
+        ],
+        "alert": false
+      }
+    },
+    {
+      "name": "quantised_cell_2_lohilo",
+      "input": {
+        "h_sp": 0.3,
+        "h_te": 0.7,
+        "h_in": 0.3
+      },
+      "expected": {
+        "state": 5,
+        "q_hci": 0.9999999981516234,
+        "logits": [
+          -8.63046074112295,
+          -20.476530824683127,
+          -27.356044508348404,
+          -11.33570966035037,
+          11.495077839614762
+        ],
+        "alert": false
+      }
+    },
+    {
+      "name": "quantised_cell_3_lohihi",
+      "input": {
+        "h_sp": 0.3,
+        "h_te": 0.7,
+        "h_in": 0.7
+      },
+      "expected": {
+        "state": 5,
+        "q_hci": 0.9997042021932243,
+        "logits": [
+          1.3695392588770487,
+          -26.476530824683127,
+          -29.356044508348404,
+          -21.335709660350368,
+          9.495077839614762
+        ],
+        "alert": false
+      }
+    },
+    {
+      "name": "quantised_cell_4_hilolo",
+      "input": {
+        "h_sp": 0.7,
+        "h_te": 0.3,
+        "h_in": 0.3
+      },
+      "expected": {
+        "state": 5,
+        "q_hci": 0.9999945807005202,
+        "logits": [
+          -0.6304607411229513,
+          -24.476530824683127,
+          -31.356044508348404,
+          -19.335709660350368,
+          11.495077839614762
+        ],
+        "alert": false
+      }
+    },
+    {
+      "name": "quantised_cell_5_hilohi",
+      "input": {
+        "h_sp": 0.7,
+        "h_te": 0.3,
+        "h_in": 0.7
+      },
+      "expected": {
+        "state": 1,
+        "q_hci": 0.00038018914438536777,
+        "logits": [
+          11.36953925887705,
+          -28.476530824683127,
+          -31.356044508348404,
+          -27.335709660350368,
+          3.495077839614761
+        ],
+        "alert": true
+      }
+    },
+    {
+      "name": "quantised_cell_6_hihilo",
+      "input": {
+        "h_sp": 0.7,
+        "h_te": 0.7,
+        "h_in": 0.3
+      },
+      "expected": {
+        "state": 1,
+        "q_hci": 0.0003801891443860894,
+        "logits": [
+          11.36953925887705,
+          -24.476530824683127,
+          -27.356044508348404,
+          -23.335709660350368,
+          3.495077839614761
+        ],
+        "alert": true
+      }
+    },
+    {
+      "name": "quantised_cell_7_hihihi",
+      "input": {
+        "h_sp": 0.7,
+        "h_te": 0.7,
+        "h_in": 0.7
+      },
+      "expected": {
+        "state": 5,
+        "q_hci": 0.9997042021932243,
+        "logits": [
+          1.3695392588770487,
+          -26.476530824683127,
+          -29.356044508348404,
+          -21.335709660350368,
+          9.495077839614762
+        ],
+        "alert": false
+      }
+    },
+    {
+      "name": "boundary_all_exactly_0.5",
+      "input": {
+        "h_sp": 0.5,
+        "h_te": 0.5,
+        "h_in": 0.5
+      },
+      "expected": {
+        "state": 5,
+        "q_hci": 0.9997042021932243,
+        "logits": [
+          1.3695392588770487,
+          -26.476530824683127,
+          -29.356044508348404,
+          -21.335709660350368,
+          9.495077839614762
+        ],
+        "alert": false
+      }
+    },
+    {
+      "name": "boundary_h_sp_exactly_0.5",
+      "input": {
+        "h_sp": 0.5,
+        "h_te": 0.3,
+        "h_in": 0.3
+      },
+      "expected": {
+        "state": 5,
+        "q_hci": 0.9999945807005202,
+        "logits": [
+          -0.6304607411229513,
+          -24.476530824683127,
+          -31.356044508348404,
+          -19.335709660350368,
+          11.495077839614762
+        ],
+        "alert": false
+      }
+    },
+    {
+      "name": "boundary_just_below_0.5",
+      "input": {
+        "h_sp": 0.499999,
+        "h_te": 0.3,
+        "h_in": 0.3
+      },
+      "expected": {
+        "state": 5,
+        "q_hci": 0.9997042021932243,
+        "logits": [
+          1.3695392588770487,
+          -26.476530824683127,
+          -29.356044508348404,
+          -21.335709660350368,
+          9.495077839614762
+        ],
+        "alert": false
+      }
+    },
+    {
+      "name": "extreme_all_zero",
+      "input": {
+        "h_sp": 0.0,
+        "h_te": 0.0,
+        "h_in": 0.0
+      },
+      "expected": {
+        "state": 5,
+        "q_hci": 0.9997042021932243,
+        "logits": [
+          1.3695392588770487,
+          -26.476530824683127,
+          -29.356044508348404,
+          -21.335709660350368,
+          9.495077839614762
+        ],
+        "alert": false
+      }
+    },
+    {
+      "name": "extreme_all_one",
+      "input": {
+        "h_sp": 1.0,
+        "h_te": 1.0,
+        "h_in": 1.0
+      },
+      "expected": {
+        "state": 5,
+        "q_hci": 0.9997042021932243,
+        "logits": [
+          1.3695392588770487,
+          -26.476530824683127,
+          -29.356044508348404,
+          -21.335709660350368,
+          9.495077839614762
+        ],
+        "alert": false
+      }
+    }
+  ]
+}

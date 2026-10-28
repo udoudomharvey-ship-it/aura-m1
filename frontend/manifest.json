@@ -1,0 +1,15 @@
+{
+  "name": "HEMM Cognitive Core — Aura-M1",
+  "short_name": "HEMM Core",
+  "description": "Real-time perceptual interface for the Aura-M1 HEMM engine",
+  "start_url": "./aura-m1-app.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#05070a",
+  "theme_color": "#05070a",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

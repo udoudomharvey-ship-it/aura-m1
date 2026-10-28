@@ -1,0 +1,24 @@
+[workspace]
+members = [
+    "aura_core",
+    "aura_py",
+    "aura_firmware",
+]
+resolver = "2"
+
+[workspace.package]
+version     = "0.1.0"
+authors     = ["Harvey Frederick Udoudom <udoudomharvey@gmail.com>"]
+edition     = "2021"
+description = "Aura-M1 Sub-Threshold Kinetic Micro-Controller"
+license     = "Proprietary"
+
+[profile.release]
+opt-level   = 3
+lto         = true
+codegen-units = 1
+panic       = "abort"
+
+[profile.bench]
+opt-level   = 3
+debug       = false

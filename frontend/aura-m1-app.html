@@ -1,0 +1,1634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HEMM Cognitive Core</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#05070a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<style>
+  :root {
+    --bg: #05070a; --panel: #0e1216; --panel-2: #131820; --border: #232a33;
+    --text: #E9EDEA; --muted: #8A9490; --signal: #6FFFB0; --alert: #FF5C4D;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text); height: 100%;
+    font-family: 'IBM Plex Mono', monospace; -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  h1 { font-family: 'Space Grotesk', sans-serif; }
+
+  .app { display: flex; flex-direction: column; height: 100vh; }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 10px;
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand .mark { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 15px; }
+  .brand .mark span { color: var(--signal); }
+  .brand .tagline { color: var(--muted); font-size: 11px; }
+  .topbar-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  input[type=text] {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; background: var(--panel-2);
+    color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 6px 8px; width: 200px;
+  }
+  button {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; background: var(--panel-2);
+    color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 6px 10px; cursor: pointer;
+  }
+  button:hover { border-color: var(--signal); color: var(--signal); }
+  label.toggle { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  #backendStatus { font-size: 10px; padding: 3px 9px; border-radius: 20px; border: 1px solid var(--border); color: var(--muted); }
+  #backendStatus[data-status="live"] { color: var(--signal); border-color: var(--signal); }
+  #backendStatus[data-status="connecting"] { color: #FFB454; border-color: #FFB454; }
+
+  .stage {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 20px; position: relative;
+  }
+  #orbHost { width: 320px; height: 320px; }
+  #orbHost:focus-visible { box-shadow: 0 0 0 2px var(--signal); border-radius: 50%; }
+
+  .status-block { text-align: center; }
+  #stateLabel { font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 600; }
+  .metrics-row { display: flex; gap: 22px; margin-top: 10px; font-size: 12px; color: var(--muted); justify-content: center; flex-wrap: wrap; }
+  .metrics-row b { color: var(--text); }
+
+  #alertBadge {
+    display: none; margin-top: 10px; font-size: 11px; letter-spacing: 0.06em; padding: 5px 14px;
+    border-radius: 20px; border: 1px solid var(--alert); color: var(--alert); background: rgba(255,92,77,0.1);
+  }
+  #alertBadge.show { display: inline-block; }
+  #pauseNote { display: none; margin-top: 6px; font-size: 10px; color: var(--muted); }
+  #pauseNote.show { display: block; }
+
+  .devpanel { position: absolute; bottom: 16px; right: 16px; width: 240px; }
+  .devpanel .panel-title { font-size: 10px; color: var(--muted); letter-spacing: 0.05em; margin-bottom: 6px; }
+  #diagOutput { display: none; font-size: 10px; color: var(--muted); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 8px; white-space: pre-wrap; }
+
+  footer.note {
+    font-size: 10px; color: #4d565f; line-height: 1.5; padding: 10px 20px; border-top: 1px solid var(--border);
+    text-align: center;
+  }
+
+  @media (max-width: 480px) {
+    #orbHost { width: 220px; height: 220px; }
+    .topbar-controls input[type=text] { width: 120px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="mark">HEMM<span> ·</span> COGNITIVE CORE</div>
+      <div class="tagline">Aura-M1 — GreyMatter Labs Ltd.</div>
+    </div>
+    <div class="topbar-controls">
+      <label class="toggle"><input type="checkbox" id="reducedMotionToggle"> Reduced motion</label>
+      <input type="text" id="backendUrlInput" value="ws://localhost:8000/ws/synthetic" aria-label="Backend WebSocket URL">
+      <button id="reconnectBtn">Connect</button>
+      <span id="backendStatus" data-status="offline">offline</span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div id="orbHost" role="button" aria-label="HEMM system status"></div>
+    <div class="status-block">
+      <div id="stateLabel">Initializing…</div>
+      <div class="metrics-row">
+        <span>Q_HCI <b id="qhciVal">—</b></span>
+        <span>Trend <b id="trendVal">—</b></span>
+        <span>Confidence <b id="confVal">—</b></span>
+        <span>Health <b id="healthVal">—</b></span>
+      </div>
+      <div id="alertBadge"></div>
+      <div id="pauseNote">PAUSED — click the core to resume</div>
+    </div>
+
+    <div class="devpanel">
+      <div class="panel-title"><label class="toggle"><input type="checkbox" id="diagToggle"> Dev diagnostics</label></div>
+      <pre id="diagOutput"></pre>
+    </div>
+  </div>
+
+  <footer class="note">
+    This is HEMM's own real-time perceptual state — computed by the same verified HEMM+BNN pipeline as
+    aura-m1-live-demo.html, simulated when no backend is connected (labeled honestly, not hidden).
+    Install this page as an app (browser menu → "Install app" / the install icon in the address bar)
+    for a standalone window with no tabs or address bar.
+  </footer>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+// ==== orb core (pure logic + multidimensional visual blending) ====
+// aura-orb-core.js
+// ════════════════════════════════════════════════════════════════════════
+// Pure logic for the Reactive Holographic AI Activity Core. No Three.js,
+// no DOM — the render layer (aura-orb-engine.js) calls into this, exactly
+// mirroring the globe's own core/engine split (aura-globe-core.js).
+// ════════════════════════════════════════════════════════════════════════
+
+export const ORB_STATES = ['idle', 'active', 'listening', 'processing', 'speaking', 'disabled'];
+
+/** Per-state target visual parameters. The engine layer smooths TOWARD
+ * these, it never jumps to them — see ExponentialSmoother below. Values
+ * are dimensionless multipliers/intensities, not raw pixel/radian units,
+ * so the render layer stays free to scale them however it likes. */
+export const STATE_PARAMS = {
+  idle:       { glow: 0.18, rotSpeed: 0.06, pulseFreq: 0.15, pulseDepth: 0.08, particleActivity: 0.10, coreEnergy: 0.20 },
+  active:     { glow: 0.45, rotSpeed: 0.18, pulseFreq: 0.35, pulseDepth: 0.18, particleActivity: 0.35, coreEnergy: 0.45 },
+  listening:  { glow: 0.65, rotSpeed: 0.28, pulseFreq: 0.9,  pulseDepth: 0.32, particleActivity: 0.55, coreEnergy: 0.60 },
+  processing: { glow: 0.75, rotSpeed: 0.55, pulseFreq: 0.6,  pulseDepth: 0.22, particleActivity: 0.75, coreEnergy: 0.70 },
+  speaking:   { glow: 0.90, rotSpeed: 0.35, pulseFreq: 1.4,  pulseDepth: 0.45, particleActivity: 0.65, coreEnergy: 0.85 },
+  disabled:   { glow: 0.04, rotSpeed: 0.01, pulseFreq: 0.0,  pulseDepth: 0.0,  particleActivity: 0.0,  coreEnergy: 0.05 },
+};
+
+export const ORB_STATE_LABELS = {
+  idle: 'AI system idle', active: 'AI system active', listening: 'AI system listening',
+  processing: 'AI system processing', speaking: 'AI system speaking', disabled: 'AI system disabled',
+};
+
+export function isValidState(s) { return ORB_STATES.includes(s); }
+
+// ════════════════════════════════════════════════════════════════════════
+// MULTIDIMENSIONAL VISUAL BLENDING (master prompt Section 8, 11, 12, 18,
+// 19, 21, 22) — the production path. STATE_PARAMS above is a single-key
+// lookup and stays only for the simple dev-mode demo (Section 57); real
+// integration goes through blendVisualParams(perceptualState), which
+// combines FOUR independent dimensions instead of picking one bucket:
+//   1. operational base (what HEMM is doing right now)
+//   2. alert severity (glow/rotation boost + the ONE place color carries
+//      semantic meaning, per Section 12's "avoid making the orb a
+//      rainbow visualization")
+//   3. confidence/uncertainty (stability -> instability, Section 22)
+//   4. entropy (structural modulation, Section 19 — NOT three bars)
+// ════════════════════════════════════════════════════════════════════════
+
+/** Base params per OPERATIONAL_STATES entry (hemm-perceptual-adapter.js).
+ * 'responding' replaces the old 'speaking' name to match Section 8's
+ * canonical list; 'offline'/'initializing' are new states this project's
+ * old 6-state model didn't distinguish (disabled vs. never-started). */
+export const OPERATIONAL_BASE_PARAMS = {
+  offline:      { glow: 0.04, rotSpeed: 0.01, pulseFreq: 0.0,  pulseDepth: 0.0,  particleActivity: 0.0,  coreEnergy: 0.05 },
+  initializing: { glow: 0.10, rotSpeed: 0.03, pulseFreq: 0.08, pulseDepth: 0.05, particleActivity: 0.05, coreEnergy: 0.12 },
+  idle:         { glow: 0.18, rotSpeed: 0.06, pulseFreq: 0.15, pulseDepth: 0.08, particleActivity: 0.10, coreEnergy: 0.20 },
+  monitoring:   { glow: 0.45, rotSpeed: 0.18, pulseFreq: 0.35, pulseDepth: 0.18, particleActivity: 0.35, coreEnergy: 0.45 },
+  listening:    { glow: 0.65, rotSpeed: 0.28, pulseFreq: 0.9,  pulseDepth: 0.32, particleActivity: 0.55, coreEnergy: 0.60 },
+  processing:   { glow: 0.75, rotSpeed: 0.55, pulseFreq: 0.6,  pulseDepth: 0.22, particleActivity: 0.75, coreEnergy: 0.70 },
+  responding:   { glow: 0.90, rotSpeed: 0.35, pulseFreq: 1.4,  pulseDepth: 0.45, particleActivity: 0.65, coreEnergy: 0.85 },
+};
+
+/** Alert severity: the one place color carries semantic weight, plus a
+ * bounded boost — never so large it overwhelms the operational base
+ * (Section 21: "do not use constant flashing", controlled not dramatic). */
+export const ALERT_VISUAL = {
+  normal:   { color: 0x6fd8ff, glowMul: 0.0,  rotMul: 0.0,  pulseAdd: 0.0,  instabilityAdd: 0.00 },
+  notice:   { color: 0x8fe0c0, glowMul: 0.08, rotMul: 0.05, pulseAdd: 0.10, instabilityAdd: 0.04 },
+  warning:  { color: 0xffb454, glowMul: 0.20, rotMul: 0.15, pulseAdd: 0.30, instabilityAdd: 0.12 },
+  critical: { color: 0xff5c4d, glowMul: 0.35, rotMul: 0.30, pulseAdd: 0.60, instabilityAdd: 0.25 },
+};
+
+/** systemHealth gets its OWN color channel, separate from alertLevel
+ * (Section 28: "a software problem must not be mistaken for a problem
+ * with the human interaction"). `color: null` means "don't override —
+ * let the alert-severity color stand", so a healthy system with a bad
+ * HCI alert still shows red, and a broken system shows violet
+ * regardless of what HCI happened to measure right before it broke. */
+export const HEALTH_VISUAL = {
+  healthy:    { color: null,     glowMul: 0.00,  rotMul: 0.00,  instabilityAdd: 0.00 },
+  degraded:   { color: null,     glowMul: -0.15, rotMul: -0.10, instabilityAdd: 0.05 },
+  recovering: { color: 0xffd166, glowMul: 0.00,  rotMul: 0.10,  instabilityAdd: 0.08 },
+  offline:    { color: null,     glowMul: 0.00,  rotMul: 0.00,  instabilityAdd: 0.00 },
+  error:      { color: 0xb84fff, glowMul: 0.15,  rotMul: 0.05,  instabilityAdd: 0.15 },
+};
+
+function clampUnit01(x) { return Math.max(0, Math.min(1, x)); }
+
+// Same normalisation ceilings already used for the entropy bars in
+// aura-m1-live-demo.html (log2 of each histogram's bin count) — reused,
+// not reinvented, so "high entropy" means the same thing everywhere in
+// this project.
+const H_SP_MAX = Math.log2(12), H_TE_MAX = 4.0, H_IN_MAX = 8.0;
+
+/**
+ * Pure function: HemmPerceptualState -> continuous visual parameters.
+ * No Three.js, fully unit-testable. The renderer smooths TOWARD this
+ * output every frame — it's a target, never applied directly (same
+ * exponential-smoothing discipline as before).
+ */
+export function blendVisualParams(perceptualState) {
+  const base = OPERATIONAL_BASE_PARAMS[perceptualState.systemState] || OPERATIONAL_BASE_PARAMS.idle;
+  const alert = ALERT_VISUAL[perceptualState.alertLevel] || ALERT_VISUAL.normal;
+  const health = HEALTH_VISUAL[perceptualState.systemHealth] || HEALTH_VISUAL.healthy;
+
+  // Confidence/uncertainty -> instability (Section 22). Honest neutral
+  // fallback when confidence data isn't available (e.g. a live-backend
+  // hub node with no softmax probs) — "don't distort for a signal we
+  // don't have", never a fabricated "certain" default.
+  const uncertainty = perceptualState.inferenceUncertainty;
+  const uncertaintyInstability = uncertainty === null ? 0 : uncertainty * 0.35;
+
+  // Entropy -> structural modulation (Section 19) — subtle, bounded,
+  // never the dominant term. Nulls (live-backend hub with no per-frame
+  // entropy) contribute nothing rather than being coerced to 0-as-a-fact.
+  const hsp = perceptualState.spatialEntropy, hte = perceptualState.temporalEntropy, hin = perceptualState.interJointEntropy;
+  const entropyDeformation      = hsp === null ? 0 : clampUnit01(hsp / H_SP_MAX) * 0.15;
+  const entropyPulseModulation  = hte === null ? 0 : clampUnit01(hte / H_TE_MAX) * 0.20;
+  const entropyParticleCoupling = hin === null ? 0 : clampUnit01(hin / H_IN_MAX) * 0.20;
+
+  // Q_HCI -> coherence (Section 11/18): higher quality = more coherent/
+  // stable rings, not a progress-bar readout of the number itself.
+  const q = perceptualState.qhci;
+  const coherence = q === null ? 0.7 : 0.4 + q * 0.6;
+
+  const instability = clampUnit01(alert.instabilityAdd + uncertaintyInstability + health.instabilityAdd);
+
+  return {
+    glow: clampUnit01(base.glow * (1 + alert.glowMul + health.glowMul)),
+    rotSpeed: base.rotSpeed * (1 + alert.rotMul + health.rotMul),
+    pulseFreq: base.pulseFreq + alert.pulseAdd + entropyPulseModulation,
+    pulseDepth: clampUnit01(base.pulseDepth * coherence + instability * 0.25),
+    particleActivity: clampUnit01(base.particleActivity * (0.7 + coherence * 0.3) + entropyParticleCoupling * 0.3),
+    coreEnergy: clampUnit01(base.coreEnergy * (0.8 + coherence * 0.2)),
+    instability,
+    deformation: clampUnit01(entropyDeformation + instability * 0.2),
+    // health.color, when set, OVERRIDES the alert color — a software
+    // problem reads as violet regardless of what HCI happened to
+    // measure right before the connection broke (Section 28). The
+    // gradual transition between colors happens in the renderer's
+    // own smoothing loop (Color.lerp toward this target each frame) —
+    // this function just names the target, it doesn't animate.
+    color: health.color !== null ? health.color : alert.color,
+  };
+}
+
+/** Alert severity must have BOTH an event pulse AND a persistent visual
+ * indication until it clears (Section 21) — this tracks the "persists"
+ * half; the renderer's triggerPulse() handles the momentary half. */
+export class AlertPersistence {
+  constructor() { this.level = 'normal'; this.since = 0; }
+  update(level, nowMs) {
+    if (level !== this.level) { this.level = level; this.since = nowMs; return true; }
+    return false;
+  }
+  isActive() { return this.level !== 'normal'; }
+}
+
+/** Exponential smoothing toward a target — the master prompt is explicit
+ * that raw audio/state values must never be applied directly to visuals
+ * (Section 7: "avoid directly applying raw ... values"). One instance
+ * per parameter; call .step(target, dt) every frame. */
+export class ExponentialSmoother {
+  constructor(initial = 0, rate = 6.0) {
+    this.value = initial;
+    this.rate = rate; // higher = snappier, lower = lazier
+  }
+  step(target, dt) {
+    const alpha = 1 - Math.exp(-this.rate * Math.max(dt, 0));
+    this.value += (target - this.value) * alpha;
+    return this.value;
+  }
+}
+
+/** Multi-parameter smoother bundle for one orb's full visual state. */
+export class OrbParamSmoother {
+  constructor(rates = {}) {
+    this.smoothers = {};
+    // Always tracks the original 6 dev-mode fields PLUS instability/
+    // deformation — those two are now standard output fields of
+    // blendVisualParams() (Section 8/22), not optional extras. Fixed
+    // after review caught that the old key set (Object.keys(STATE_PARAMS.idle)
+    // only) would silently leave p.instability/p.deformation undefined,
+    // which corrupts every downstream arithmetic use of them into NaN
+    // (e.g. nucleus scale) the first time real telemetry ever arrives —
+    // never triggered in dev mode's simple setState() calls, which is
+    // exactly why it wasn't obvious.
+    const keys = new Set([...Object.keys(STATE_PARAMS.idle), 'instability', 'deformation']);
+    for (const key of keys) {
+      this.smoothers[key] = new ExponentialSmoother(STATE_PARAMS.idle[key] ?? 0, rates[key] ?? 4.0);
+    }
+  }
+  step(targetParams, dt) {
+    const out = {};
+    for (const key of Object.keys(this.smoothers)) {
+      out[key] = this.smoothers[key].step(targetParams[key] ?? 0, dt);
+    }
+    return out;
+  }
+}
+
+/** Clamped, smoothed audio level — feeds an *additional* multiplier on
+ * top of the current state's params (Section 7/17: audio reactivity is
+ * a layer, not a replacement for state-driven animation). */
+export class AudioReactivity {
+  constructor(smoothRate = 10.0) {
+    this._smoother = new ExponentialSmoother(0, smoothRate);
+    this.enabled = false;
+  }
+  setLevel(raw) {
+    const clamped = Math.max(0, Math.min(1, Number(raw) || 0));
+    this.enabled = true;
+    return clamped;
+  }
+  step(rawLevel, dt) {
+    if (rawLevel === null || rawLevel === undefined) {
+      // No audio source connected — decay smoothly to 0 rather than
+      // holding whatever the last value was, so a disconnected source
+      // doesn't leave the orb stuck mid-pulse.
+      return this._smoother.step(0, dt);
+    }
+    const clamped = Math.max(0, Math.min(1, Number(rawLevel) || 0));
+    return this._smoother.step(clamped, dt);
+  }
+}
+
+/** State machine wrapper — validates transitions, never throws on a bad
+ * input (Section: component must not crash the host app), and records
+ * transition timestamps so the engine can drive transition-specific
+ * animation (Section 18) rather than only steady-state looks. */
+export class OrbStateMachine {
+  constructor(initial = 'idle') {
+    this.state = isValidState(initial) ? initial : 'idle';
+    this.previousState = this.state;
+    this.transitionedAt = 0;
+  }
+  setState(next, nowMs = 0) {
+    if (!isValidState(next)) return { ok: false, reason: `unknown state "${next}"` };
+    if (next === this.state) return { ok: true, changed: false };
+    this.previousState = this.state;
+    this.state = next;
+    this.transitionedAt = nowMs;
+    return { ok: true, changed: true, from: this.previousState, to: this.state };
+  }
+  targetParams() { return STATE_PARAMS[this.state]; }
+  label() { return ORB_STATE_LABELS[this.state]; }
+}
+
+// NOTE: the old single-string stateFromAuraTelemetry() mapper that used
+// to live here has been superseded by hemm-perceptual-adapter.js's
+// computePerceptualState() — that's now the ONE canonical translation
+// from real telemetry to orb-facing state (master prompt Section 6/29).
+// OrbStateMachine + STATE_PARAMS above remain in place, but only for the
+// simple dev-mode manual demo (Section 57) — production always goes
+// through the adapter and blendVisualParams(), not this simpler model.
+
+// ==== HEMM perceptual state adapter (pure logic) ====
+// hemm-perceptual-adapter.js
+// ════════════════════════════════════════════════════════════════════════
+// PERCEPTUAL STATE ADAPTER (master prompt Section 6, 7, 29)
+//
+//   HEMM ENGINE  ->  THIS FILE  ->  3D ORB RENDERER
+//
+// This is the ONLY place real telemetry gets translated into orb-facing
+// concepts. The renderer never touches raw HCI/energy/backend fields
+// directly, and this file never touches Three.js — the same split as
+// aura-globe-core.js / aura-globe-engine.js, applied to the orb.
+//
+// SCIENTIFIC INTEGRITY (Section 48): every field below traces to an
+// existing metric already computed elsewhere in this project, or is
+// explicitly `null` when the data isn't available (e.g. a live-backend
+// hub node has no h_sp/h_te/h_in or softmax probs — see
+// aura-globe-app.js's own honesty note on this). Nothing here is
+// invented to make the visualization look more complete than the data
+// actually is.
+// ════════════════════════════════════════════════════════════════════════
+
+export const OPERATIONAL_STATES = ['offline', 'initializing', 'idle', 'monitoring', 'listening', 'processing', 'responding'];
+export const ACTIVITY_LEVELS = ['low', 'moderate', 'high'];
+export const ALERT_SEVERITIES = ['normal', 'notice', 'warning', 'critical'];
+export const HEALTH_STATES = ['offline', 'degraded', 'recovering', 'healthy', 'error'];
+
+/**
+ * @typedef {Object} HemmPerceptualState
+ * @property {string} systemState        - one of OPERATIONAL_STATES
+ * @property {string} activityLevel      - one of ACTIVITY_LEVELS (how much Q_HCI is moving, not its value)
+ * @property {number|null} qhci
+ * @property {number} qhciDelta          - change over the trend window
+ * @property {'improving'|'declining'|'stable'} qhciTrend
+ * @property {number|null} spatialEntropy
+ * @property {number|null} temporalEntropy
+ * @property {number|null} interJointEntropy
+ * @property {number|null} inferenceConfidence   - 1 - normalized softmax entropy; null if probs unavailable
+ * @property {number|null} inferenceUncertainty  - normalized softmax entropy; null if probs unavailable
+ * @property {string} alertLevel         - one of ALERT_SEVERITIES, derived from the SAME state boundaries
+ *                                          already used elsewhere in this project (QualityStateEncoder /
+ *                                          NCL_BOUNDARIES) — not a new threshold scheme
+ * @property {boolean|null} energyAvailable
+ * @property {string} systemHealth       - one of HEALTH_STATES — independent of HCI quality (Section 23):
+ *                                          a person can have poor HCI while HEMM itself is perfectly healthy
+ * @property {number|null} telemetryFreshnessSec
+ * @property {number} timestamp
+ */
+
+// Reuses the existing 5-state quality boundaries (same ones behind
+// STATE_LABELS / STATE_COLORS elsewhere in this project) rather than
+// inventing a second threshold scheme for alert severity.
+const ALERT_SEVERITY_BY_STATE = { 5: 'normal', 4: 'normal', 3: 'notice', 2: 'warning', 1: 'critical' };
+export function alertSeverityFromState(state5) {
+  return ALERT_SEVERITY_BY_STATE[state5] || 'normal';
+}
+
+/** Rolling Q_HCI window for delta/trend — the "activity" and "trend"
+ * dimensions are about how the metric is MOVING, a genuinely different
+ * signal from its instantaneous value (Section 8). */
+export class QhciTrendTracker {
+  constructor(windowSize = 8) {
+    this.windowSize = Math.max(2, windowSize);
+    this.buffer = [];
+  }
+  push(q) {
+    if (typeof q !== 'number' || !Number.isFinite(q)) return;
+    this.buffer.push(q);
+    if (this.buffer.length > this.windowSize) this.buffer.shift();
+  }
+  delta() {
+    if (this.buffer.length < 2) return 0;
+    return this.buffer[this.buffer.length - 1] - this.buffer[0];
+  }
+  trend(threshold = 0.03) {
+    const d = this.delta();
+    if (Math.abs(d) < threshold) return 'stable';
+    return d > 0 ? 'improving' : 'declining';
+  }
+  activityLevel() {
+    const d = Math.abs(this.delta());
+    if (d > 0.15) return 'high';
+    if (d > 0.05) return 'moderate';
+    return 'low';
+  }
+}
+
+/** Standard normalized-Shannon-entropy confidence measure over a
+ * softmax distribution — a peakier distribution (one class dominant)
+ * means higher confidence; a flat distribution means the network isn't
+ * sure. This is a well-established technique, not invented for this
+ * component. Returns nulls (not a fabricated default) when probs aren't
+ * available, e.g. from a live-backend hub node whose TelemetryRecord
+ * schema doesn't carry them. */
+export function confidenceFromProbs(probs) {
+  if (!Array.isArray(probs) || probs.length === 0) return { confidence: null, uncertainty: null };
+  const n = probs.length;
+  const maxH = Math.log2(n);
+  if (maxH <= 0) return { confidence: null, uncertainty: null };
+  let h = 0;
+  for (const p of probs) {
+    const pc = Math.max(0, Math.min(1, Number(p) || 0));
+    if (pc > 0) h += -pc * Math.log2(pc);
+  }
+  const uncertainty = Math.max(0, Math.min(1, h / maxH));
+  return { confidence: 1 - uncertainty, uncertainty };
+}
+
+export function healthFromSignals({ backendStatus, stalenessSec, hasEverSeenData, hasTransportError }) {
+  // A transport error (e.g. WebSocket onerror) is a distinct, stronger
+  // signal than plain disconnection — it means something actively went
+  // wrong, not just "never connected" or "connection closed cleanly".
+  // Checked first since it's the most specific available signal.
+  if (hasTransportError) return 'error';
+  if (!hasEverSeenData && (backendStatus === 'offline' || backendStatus == null)) return 'offline';
+  if (backendStatus === 'connecting') return 'recovering';
+  if (stalenessSec !== null && stalenessSec !== undefined && stalenessSec > 5) return 'degraded';
+  return 'healthy';
+}
+
+export function operationalStateFrom({ userPaused, backendStatus, hubNode, recentlyFired }) {
+  if (userPaused) return 'offline';
+  if (backendStatus === 'connecting') return 'listening';
+  if (!hubNode) return 'initializing';
+  if (recentlyFired) return 'processing';
+  const hasEnergy = hubNode.energy ? hubNode.energy.can_fire !== false : true;
+  return hasEnergy ? 'monitoring' : 'idle';
+}
+
+/**
+ * The single normalized HEMM perceptual state. Pure function — same
+ * inputs always produce the same output, fully unit-testable without a
+ * renderer, a DOM, or a browser (Section 49).
+ *
+ * @param {Object} inputs
+ * @param {Object|null} inputs.hubNode        - {hci:{hsp,hte,hin,qhci,state,alert,probs}, energy:{...}} or null
+ * @param {string} inputs.backendStatus       - TelemetryStore/GlobeApp's existing connection status string
+ * @param {boolean} inputs.userPaused
+ * @param {number|null} inputs.stalenessSec
+ * @param {boolean} inputs.recentlyFired
+ * @param {boolean} inputs.hasEverSeenData
+ * @param {QhciTrendTracker} inputs.trendTracker  - caller owns this so it can persist across calls
+ * @returns {HemmPerceptualState}
+ */
+export function computePerceptualState({
+  hubNode, backendStatus, userPaused, stalenessSec, recentlyFired, hasEverSeenData,
+  hasTransportError = false, trendTracker,
+}) {
+  if (hubNode?.hci && typeof hubNode.hci.qhci === 'number') trendTracker.push(hubNode.hci.qhci);
+
+  const state5 = hubNode?.hci?.state ?? null;
+  const { confidence, uncertainty } = confidenceFromProbs(hubNode?.hci?.probs);
+
+  return {
+    systemState: operationalStateFrom({ userPaused, backendStatus, hubNode, recentlyFired }),
+    activityLevel: trendTracker.activityLevel(),
+    qhci: hubNode?.hci?.qhci ?? null,
+    qhciDelta: trendTracker.delta(),
+    qhciTrend: trendTracker.trend(),
+    spatialEntropy: hubNode?.hci?.hsp ?? null,
+    temporalEntropy: hubNode?.hci?.hte ?? null,
+    interJointEntropy: hubNode?.hci?.hin ?? null,
+    inferenceConfidence: confidence,
+    inferenceUncertainty: uncertainty,
+    alertLevel: state5 !== null ? alertSeverityFromState(state5) : 'normal',
+    energyAvailable: hubNode?.energy ? hubNode.energy.can_fire !== false : null,
+    systemHealth: healthFromSignals({ backendStatus, stalenessSec, hasEverSeenData, hasTransportError }),
+    telemetryFreshnessSec: stalenessSec ?? null,
+    timestamp: Date.now(),
+  };
+}
+
+// ==== HEMM Cognitive Core renderer (Three.js rendering) ====
+// orb-renderer.js
+// ════════════════════════════════════════════════════════════════════════
+// HEMM Cognitive Core — render layer, v3. Same imperative API as before
+// (setState/setPerceptualState/triggerPulse/destroy) — nothing calling
+// into this class needs to change. This revision is a visual-quality
+// pass in response to direct feedback that v2 (translucent sphere +
+// thin ribbons + no bloom) read as "simplistic" and "bony" against the
+// reference image. Changes, in the order they matter most:
+//
+//   1. Real bloom post-processing (EffectComposer + UnrealBloomPass) —
+//      the single biggest lever. Additive blending alone makes things
+//      brighter, not glowing; bloom is what makes light bleed into the
+//      space around bright areas, which is most of what reads as
+//      "holographic" in the reference. This is a genuinely new
+//      dependency (three/addons/postprocessing/*) not used elsewhere
+//      in this project — wrapped in its own try/catch so a bloom-
+//      specific failure degrades to direct rendering (no bloom, but
+//      still a working orb) rather than losing the scene entirely.
+//   2. Thicker ribbons, each now two layered tubes (bright core +
+//      wide soft halo) instead of one thin tube.
+//   3. Denser, higher-contrast procedural circuitry.
+//   4. Gradient coloring (white-hot center fading to the theme color at
+//      the rim) instead of one flat hue at variable brightness.
+//   5. More particles.
+//
+// Architecture is unchanged: this file still never computes HEMM facts
+// — every number driving a visual here originates in
+// hemm-perceptual-adapter.js or a dev-mode button.
+// ════════════════════════════════════════════════════════════════════════
+
+// ── Sphere shader: fresnel translucency + denser procedural circuitry
+// + white-hot-to-rim gradient (was a flat hue at variable brightness) ──
+const SPHERE_VERT = `
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec3 vWorldPosition;
+  void main() {
+    vUv = uv;
+    vNormal = normalize(normalMatrix * normal);
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldPosition = worldPos.xyz;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+const SPHERE_FRAG = `
+  uniform vec3 cameraPosWorld;
+  uniform vec3 coreColor;
+  uniform float energy;          // 0..1, smoothed coreEnergy
+  uniform float uTime;
+  uniform float circuitActivity; // 0..1, ties to particleActivity
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec3 vWorldPosition;
+
+  float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+  }
+
+  // Denser grid (was 28x14), lower activation threshold (was 0.6, now
+  // 0.32) so far more of the sphere reads as "internally alive" instead
+  // of mostly empty — this was the single biggest contributor to the
+  // "too simplistic" feedback, more than any color/glow change.
+  float circuitPattern(vec2 uv) {
+    vec2 gridUv = uv * vec2(40.0, 22.0);
+    vec2 cell = floor(gridUv);
+    vec2 f = fract(gridUv);
+    float h = hash(cell);
+    float active = step(0.32, h);
+    float isHorizontal = step(0.5, hash(cell + 17.3));
+    float lineWidth = 0.07;
+    float line = isHorizontal > 0.5
+      ? smoothstep(lineWidth, 0.0, abs(f.y - 0.5))
+      : smoothstep(lineWidth, 0.0, abs(f.x - 0.5));
+    float nodeDist = length(f - 0.5);
+    float node = smoothstep(0.16, 0.0, nodeDist) * step(0.7, hash(cell + 31.7));
+    float pulsePhase = fract(uTime * 0.12 + h * 4.0);
+    float pulse = smoothstep(0.0, 0.08, pulsePhase) * smoothstep(0.22, 0.08, pulsePhase);
+    return active * (line * 0.7 + node) * (0.5 + pulse * 1.4);
+  }
+
+  void main() {
+    vec3 viewDir = normalize(cameraPosWorld - vWorldPosition);
+    float fresnel = pow(1.0 - abs(dot(viewDir, vNormal)), 2.0);
+    float circuit = circuitPattern(vUv) * (0.6 + circuitActivity * 0.9);
+
+    // Gradient: near-white at the fresnel-lit rim, theme color toward
+    // the center — matches the reference's white-hot-core-fading-out
+    // look rather than one flat hue at variable brightness.
+    vec3 hot = vec3(1.0, 1.0, 1.0);
+    vec3 gradient = mix(coreColor, hot, clamp(fresnel * 1.4 + energy * 0.3, 0.0, 1.0));
+
+    float core = 0.14 + energy * 0.5;
+    vec3 color = gradient * (core + fresnel * (0.7 + energy * 0.8)) + coreColor * circuit * 1.1;
+    float alpha = clamp(0.20 + fresnel * 0.68 + circuit * 0.45, 0.0, 1.0);
+    gl_FragColor = vec4(color, alpha);
+  }
+`;
+
+// ── Floor projection shader: radial glow + concentric traces ─────────
+const FLOOR_FRAG = `
+  uniform vec3 glowColor;
+  uniform float uOpacity;
+  uniform float uTime;
+  varying vec2 vUv;
+  void main() {
+    float d = distance(vUv, vec2(0.5)) * 2.0;
+    float fade = smoothstep(1.0, 0.15, d);
+    float ring1 = smoothstep(0.03, 0.0, abs(d - 0.55));
+    float ring2 = smoothstep(0.02, 0.0, abs(d - 0.82));
+    float wave = smoothstep(0.03, 0.0, abs(d - fract(uTime * 0.08)));
+    float alpha = (fade * 0.22 + ring1 * 0.5 + ring2 * 0.35 + wave * 0.4) * uOpacity;
+    gl_FragColor = vec4(glowColor, clamp(alpha, 0.0, 1.0));
+  }
+`;
+const FLOOR_VERT = `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const DEFAULT_THEME = { core: 0x6fd8ff, ring: 0x4fc3f7, particle: 0x8fe8ff, glow: 0x2fb6ff };
+
+const PULSE_ROUTING = {
+  observation:  { nucleus: 0.15, ribbons: 0.05, particles: 0.05 },
+  inference:    { nucleus: 0.30, ribbons: 0.60, particles: 0.20 },
+  state_change: { nucleus: 0.35, ribbons: 0.35, particles: 0.10 },
+  alert:        { nucleus: 0.80, ribbons: 0.80, particles: 0.30 },
+  response:     { nucleus: 0.20, ribbons: 0.20, particles: 0.70 },
+};
+const PULSE_DECAY_PER_SEC = 5.5;
+
+const NEUTRAL_PARAMS = { glow: 0.2, rotSpeed: 0.05, pulseFreq: 0.1, pulseDepth: 0.05, particleActivity: 0.1, coreEnergy: 0.2, instability: 0, deformation: 0, color: DEFAULT_THEME.core };
+
+function buildRibbonCurve(radius, wobbleAmp, wobbleFreq, tiltX, tiltZ, phase, segments = 80) {
+  const pts = [];
+  const cosX = Math.cos(tiltX), sinX = Math.sin(tiltX);
+  const cosZ = Math.cos(tiltZ), sinZ = Math.sin(tiltZ);
+  for (let i = 0; i <= segments; i++) {
+    const t = (i / segments) * Math.PI * 2;
+    const wob = Math.sin(t * wobbleFreq + phase) * wobbleAmp;
+    const x0 = radius * Math.cos(t);
+    const y0 = wob;
+    const z0 = radius * Math.sin(t);
+    const y1 = y0 * cosX - z0 * sinX;
+    const z1 = y0 * sinX + z0 * cosX;
+    const x2 = x0 * cosZ - y1 * sinZ;
+    const y2 = x0 * sinZ + y1 * cosZ;
+    pts.push(new THREE.Vector3(x2, y2, z1));
+  }
+  return new THREE.CatmullRomCurve3(pts, true);
+}
+
+export class AuraOrbEngine {
+  constructor(container, options = {}) {
+    this.container = container;
+    this.size = options.size || 220;
+    this.theme = { ...DEFAULT_THEME, ...(options.theme || {}) };
+    this.interactive = options.interactive !== false;
+    this.audioReactive = !!options.audioReactive;
+    this.reducedMotion = !!options.reducedMotion;
+    this.particleDensity = options.particleDensity ?? 1.0;
+    this.showParticles = options.showParticles !== false;
+    this.showOuterRings = options.showOuterRings !== false;
+    this.showFloor = options.showFloor !== false;
+    this.onStateChange = options.onStateChange || (() => {});
+    this.onToggle = options.onToggle || (() => {});
+    this.onAlertChange = options.onAlertChange || (() => {});
+
+    this._destroyed = false;
+    this._clock = { last: performance.now() };
+    this._raf = null;
+    this._audioLevel = null;
+    this._targetParams = NEUTRAL_PARAMS;
+    this._pulseNucleus = 0; this._pulseRibbons = 0; this._pulseParticles = 0;
+    this._label = 'AI system idle';
+    this._contextLost = false;
+    this._fpsLast = performance.now(); this._fpsFrames = 0; this._fps = 0;
+    this._bloomEnabled = false;
+
+    this._initState(options.initialState || 'idle');
+
+    this._webglFailed = false;
+    try {
+      this._initScene();
+      this._initSphere();
+      this._initNexus();
+      this._initRibbons();
+      this._initParticles();
+      this._initFloor();
+      this._initBloom();
+    } catch (e) {
+      this._webglFailed = true;
+      this._initDomFallback(e);
+    }
+    this._initInteraction();
+
+    this._raf = requestAnimationFrame((t) => this._tick(t));
+  }
+
+  _initState(initialState) {
+    this._stateMachine = new OrbStateMachine(initialState);
+    this._paramSmoother = new OrbParamSmoother({
+      glow: 4, rotSpeed: 4, pulseFreq: 4, pulseDepth: 4, particleActivity: 4, coreEnergy: 4,
+      instability: 3, deformation: 3,
+    });
+    this._audioReactivity = new AudioReactivity();
+    this._alertPersistence = new AlertPersistence();
+    this._colorCurrent = new (typeof THREE !== 'undefined' ? THREE.Color : Object)(this.theme.core);
+    this._colorTarget = this._colorCurrent.clone ? this._colorCurrent.clone() : null;
+  }
+
+  // ── Public API (unchanged from v2) ──────────────────────────────
+  setPerceptualState(perceptualState, nowMs = performance.now()) {
+    const params = blendVisualParams(perceptualState);
+    this._targetParams = params;
+    this._label = describePerceptualState(perceptualState);
+    this._updateAriaLabel();
+
+    const alertChanged = this._alertPersistence.update(perceptualState.alertLevel, nowMs);
+    if (alertChanged) {
+      if (perceptualState.alertLevel !== 'normal') {
+        const magnitude = { notice: 0.3, warning: 0.6, critical: 1.0 }[perceptualState.alertLevel] || 0.3;
+        this.triggerPulse('alert', magnitude);
+      }
+      this.onAlertChange(perceptualState.alertLevel);
+    }
+  }
+
+  setState(state, nowMs = performance.now()) {
+    const result = this._stateMachine.setState(state, nowMs);
+    if (result.changed) {
+      this._targetParams = { ...STATE_PARAMS[state], instability: 0, deformation: 0, color: this.theme.core };
+      this._label = ORB_STATE_LABELS[state] || state;
+      this._updateAriaLabel();
+      this.onStateChange(result);
+    }
+    return result;
+  }
+  getState() { return this._stateMachine.state; }
+
+  triggerPulse(type, magnitude = 1.0) {
+    const route = PULSE_ROUTING[type] || PULSE_ROUTING.observation;
+    const m = Math.max(0, Math.min(1, magnitude));
+    this._pulseNucleus = Math.min(1, this._pulseNucleus + route.nucleus * m);
+    this._pulseRibbons = Math.min(1, this._pulseRibbons + route.ribbons * m);
+    this._pulseParticles = Math.min(1, this._pulseParticles + route.particles * m);
+  }
+
+  setAudioLevel(level) { this._audioLevel = level; }
+  setReducedMotion(on) { this.reducedMotion = !!on; }
+  setInteractive(on) {
+    this.interactive = !!on;
+    this.container.style.cursor = this.interactive ? 'pointer' : 'default';
+  }
+  setSize(px) {
+    this.size = px;
+    if (!this._webglFailed) this._applySize();
+  }
+
+  getDiagnostics() {
+    return {
+      fps: Math.round(this._fps),
+      state: this._stateMachine.state,
+      label: this._label,
+      alertLevel: this._alertPersistence.level,
+      particleCount: this._particles ? this._particles.geometry.attributes.position.count : 0,
+      ribbonCount: this._ribbons ? this._ribbons.length : 0,
+      bloomEnabled: this._bloomEnabled,
+      contextLost: this._contextLost,
+      webglFailed: this._webglFailed,
+      audioConnected: this._audioLevel !== null,
+      reducedMotion: this.reducedMotion,
+    };
+  }
+
+  destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+    cancelAnimationFrame(this._raf);
+    window.removeEventListener('resize', this._boundResize);
+    this.container.removeEventListener('pointerdown', this._boundPointerDown);
+    this.container.removeEventListener('keydown', this._boundKeyDown);
+    if (this._webglFailed) {
+      if (this._domFallbackEl && this._domFallbackEl.parentNode) this._domFallbackEl.parentNode.removeChild(this._domFallbackEl);
+      return;
+    }
+    if (this._boundContextLost) this.renderer.domElement.removeEventListener('webglcontextlost', this._boundContextLost);
+    if (this._boundContextRestored) this.renderer.domElement.removeEventListener('webglcontextrestored', this._boundContextRestored);
+    if (this.composer && typeof this.composer.dispose === 'function') this.composer.dispose();
+    this.scene.traverse((obj) => {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const m of mats) m.dispose();
+      }
+    });
+    this.renderer.dispose();
+    if (this.renderer.domElement.parentNode) {
+      this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
+    }
+  }
+
+  _initDomFallback(originalError) {
+    console.warn('[AuraOrbEngine] WebGL unavailable, using DOM fallback:', originalError?.message || originalError);
+    const el = document.createElement('div');
+    el.style.cssText = `width:${this.size}px;height:${this.size}px;border-radius:50%;
+      background:radial-gradient(circle, ${this._hexColor(this.theme.core)}55, transparent 70%);
+      border:2px solid ${this._hexColor(this.theme.core)};
+      display:flex;align-items:center;justify-content:center;
+      font-family:monospace;font-size:10px;color:${this._hexColor(this.theme.core)};
+      text-align:center;transition:opacity .3s;`;
+    el.textContent = 'AI CORE';
+    this.container.appendChild(el);
+    this._domFallbackEl = el;
+  }
+  _hexColor(n) { return '#' + n.toString(16).padStart(6, '0'); }
+
+  // ── Scene setup ──────────────────────────────────────────────────
+  _initScene() {
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 20);
+    this.camera.position.set(0, 0.15, 3.3);
+
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    // Solid dark fallback rather than relying purely on alpha
+    // transparency — bloom post-processing has known edge cases around
+    // preserving destination alpha through its render-target chain, and
+    // this color matches every page this widget is actually embedded in
+    // (all near-black), so even a worst-case non-transparent composite
+    // still blends acceptably rather than showing a jarring mismatch.
+    this.renderer.setClearColor(0x05070a, 1);
+    this.container.appendChild(this.renderer.domElement);
+    this._applySize();
+
+    this._boundContextLost = (e) => {
+      e.preventDefault();
+      this._contextLost = true;
+      console.warn('[AuraOrbEngine] WebGL context lost — pausing until restored.');
+    };
+    this._boundContextRestored = () => {
+      this._contextLost = false;
+      console.warn('[AuraOrbEngine] WebGL context restored — resuming.');
+    };
+    this.renderer.domElement.addEventListener('webglcontextlost', this._boundContextLost, false);
+    this.renderer.domElement.addEventListener('webglcontextrestored', this._boundContextRestored, false);
+
+    const fill = new THREE.AmbientLight(0x224466, 0.6);
+    this.scene.add(fill);
+  }
+
+  /** Bloom is genuinely new (three/addons/postprocessing/*, not used
+   * anywhere else in this project) — isolated in its own try/catch so a
+   * failure here degrades to direct rendering (still a working orb,
+   * just without the glow-bleed effect) rather than losing the scene. */
+  _initBloom() {
+    try {
+      this.composer = new EffectComposer(this.renderer);
+      this.composer.addPass(new RenderPass(this.scene, this.camera));
+      this._bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(this.size, this.size),
+        1.15,  // strength
+        0.55,  // radius
+        0.12,  // threshold — low, so moderately bright areas bloom too, not just the brightest pixel
+      );
+      this.composer.addPass(this._bloomPass);
+      this.composer.setSize(this.size, this.size);
+      this._bloomEnabled = true;
+    } catch (e) {
+      console.warn('[AuraOrbEngine] Bloom post-processing unavailable, rendering directly:', e?.message || e);
+      this._bloomEnabled = false;
+      this.composer = null;
+    }
+  }
+
+  _applySize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.renderer.setPixelRatio(dpr);
+    this.renderer.setSize(this.size, this.size, true);
+    this.camera.aspect = 1;
+    this.camera.updateProjectionMatrix();
+    if (this.composer) this.composer.setSize(this.size, this.size);
+    if (this._bloomPass) this._bloomPass.resolution.set(this.size, this.size);
+  }
+
+  _initSphere() {
+    const geo = new THREE.SphereGeometry(0.56, 64, 64);
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        cameraPosWorld: { value: this.camera.position.clone() },
+        coreColor: { value: new THREE.Color(this.theme.core) },
+        energy: { value: 0.2 },
+        uTime: { value: 0 },
+        circuitActivity: { value: 0.3 },
+      },
+      vertexShader: SPHERE_VERT,
+      fragmentShader: SPHERE_FRAG,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this._sphere = new THREE.Mesh(geo, mat);
+    this.scene.add(this._sphere);
+
+    const wireGeo = new THREE.IcosahedronGeometry(0.585, 1);
+    const wireMat = new THREE.MeshBasicMaterial({
+      color: this.theme.ring, wireframe: true, transparent: true, opacity: 0.22,
+    });
+    this._wireframe = new THREE.Mesh(wireGeo, wireMat);
+    this.scene.add(this._wireframe);
+  }
+
+  _initNexus() {
+    // Innermost core: near-white, very bright — the "hot" point.
+    const geo = new THREE.SphereGeometry(0.09, 20, 20);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.95,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    this._nexusCore = new THREE.Mesh(geo, mat);
+    this.scene.add(this._nexusCore);
+
+    // Halo takes the theme color — white center fading to theme-color
+    // glow, matching the sphere's own gradient treatment.
+    const haloGeo = new THREE.SphereGeometry(0.17, 16, 16);
+    const haloMat = new THREE.MeshBasicMaterial({
+      color: this.theme.core, transparent: true, opacity: 0.3,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    this._nexusHalo = new THREE.Mesh(haloGeo, haloMat);
+    this.scene.add(this._nexusHalo);
+
+    const spokeCount = 14;
+    const positions = new Float32Array(spokeCount * 2 * 3);
+    for (let i = 0; i < spokeCount; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const len = 0.30 + Math.random() * 0.22;
+      const x = len * Math.sin(phi) * Math.cos(theta);
+      const y = len * Math.sin(phi) * Math.sin(theta);
+      const z = len * Math.cos(phi);
+      positions.set([0, 0, 0, x, y, z], i * 6);
+    }
+    const spokeGeo = new THREE.BufferGeometry();
+    spokeGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const spokeMat = new THREE.LineBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending,
+    });
+    this._nexusSpokes = new THREE.LineSegments(spokeGeo, spokeMat);
+    this.scene.add(this._nexusSpokes);
+  }
+
+  /** Each ribbon is now TWO layered tubes — a bright, narrower core and
+   * a wide, soft, more transparent halo around it — instead of one thin
+   * tube. This is the direct fix for "too bony": a single 0.007-radius
+   * tube reads as wireframe no matter how bright it is; a halo around
+   * it is what makes it read as a thick glowing band. */
+  _initRibbons() {
+    this._ribbons = [];
+    const specs = [
+      { radius: 0.92, wobbleAmp: 0.16, wobbleFreq: 3, tiltX: 0.35, tiltZ: 0.10, phase: 0.0, speed: 0.14, tubeR: 0.020 },
+      { radius: 1.12, wobbleAmp: 0.20, wobbleFreq: 2, tiltX: -0.55, tiltZ: 0.75, phase: 2.1, speed: -0.10, tubeR: 0.016 },
+      { radius: 1.30, wobbleAmp: 0.14, wobbleFreq: 4, tiltX: 0.85, tiltZ: -0.45, phase: 4.2, speed: 0.07, tubeR: 0.013 },
+    ];
+    for (const spec of specs) {
+      const curve = buildRibbonCurve(spec.radius, spec.wobbleAmp, spec.wobbleFreq, spec.tiltX, spec.tiltZ, spec.phase);
+
+      const coreGeo = new THREE.TubeGeometry(curve, 140, spec.tubeR, 8, true);
+      const coreMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+      const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+
+      const haloGeo = new THREE.TubeGeometry(curve, 140, spec.tubeR * 2.8, 8, true);
+      const haloMat = new THREE.MeshBasicMaterial({
+        color: this.theme.ring, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+      const haloMesh = new THREE.Mesh(haloGeo, haloMat);
+
+      const group = new THREE.Group();
+      group.add(haloMesh);
+      group.add(coreMesh);
+      this.scene.add(group);
+      this._ribbons.push({ group, coreMesh, haloMesh, baseSpeed: spec.speed });
+    }
+  }
+
+  _initParticles() {
+    // Was 220 — nearly double, matching the reference's much denser
+    // particle field rather than a handful of sparse points.
+    const baseCount = 420;
+    const count = Math.max(20, Math.round(baseCount * this.particleDensity));
+    const positions = new Float32Array(count * 3);
+    this._particleBase = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const r = 0.72 + Math.random() * 0.9;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const x = r * Math.sin(phi) * Math.cos(theta);
+      const y = r * Math.sin(phi) * Math.sin(theta);
+      const z = r * Math.cos(phi);
+      positions.set([x, y, z], i * 3);
+      this._particleBase.set([x, y, z], i * 3);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({
+      color: this.theme.particle, size: 0.020, transparent: true, opacity: 0.6,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    this._particles = new THREE.Points(geo, mat);
+    this._particles.visible = this.showParticles;
+    this.scene.add(this._particles);
+  }
+
+  _initFloor() {
+    const geo = new THREE.CircleGeometry(1.7, 64);
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        glowColor: { value: new THREE.Color(this.theme.glow) },
+        uOpacity: { value: 0.28 },
+        uTime: { value: 0 },
+      },
+      vertexShader: FLOOR_VERT,
+      fragmentShader: FLOOR_FRAG,
+      transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+    });
+    this._floor = new THREE.Mesh(geo, mat);
+    this._floor.rotation.x = -Math.PI * 0.38;
+    this._floor.position.set(0, -0.85, -0.35);
+    this._floor.visible = this.showFloor;
+    this.scene.add(this._floor);
+  }
+
+  _initInteraction() {
+    this.container.tabIndex = 0;
+    this.container.setAttribute('role', 'button');
+    this.container.style.outline = 'none';
+    this._updateAriaLabel();
+    if (this.interactive) this.container.style.cursor = 'pointer';
+
+    this._boundPointerDown = () => this._handleToggle();
+    this._boundKeyDown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._handleToggle(); }
+    };
+    this.container.addEventListener('pointerdown', this._boundPointerDown);
+    this.container.addEventListener('keydown', this._boundKeyDown);
+
+    this._boundResize = () => {};
+    window.addEventListener('resize', this._boundResize);
+  }
+
+  _handleToggle() {
+    if (!this.interactive) return;
+    this.triggerPulse('state_change', 0.6);
+    const next = this._stateMachine.state === 'disabled' ? 'active' : 'disabled';
+    this.onToggle(next);
+  }
+
+  _updateAriaLabel() {
+    this.container.setAttribute('aria-label', this._label);
+  }
+
+  // ── Main loop ────────────────────────────────────────────────────
+  _tick(nowMs) {
+    if (this._destroyed) return;
+    const dt = Math.min((nowMs - this._clock.last) / 1000, 0.1);
+    this._clock.last = nowMs;
+
+    this._fpsFrames += 1;
+    if (nowMs - this._fpsLast >= 1000) {
+      this._fps = (this._fpsFrames * 1000) / (nowMs - this._fpsLast);
+      this._fpsFrames = 0; this._fpsLast = nowMs;
+    }
+
+    if (this._webglFailed) {
+      if (this._domFallbackEl) {
+        const alertActive = this._alertPersistence.isActive();
+        this._domFallbackEl.style.opacity = alertActive ? '1' : (0.6 + Math.sin(nowMs * 0.001) * 0.15).toFixed(2);
+      }
+      this._raf = requestAnimationFrame((t) => this._tick(t));
+      return;
+    }
+    if (this._contextLost) {
+      this._raf = requestAnimationFrame((t) => this._tick(t));
+      return;
+    }
+
+    const p = this._paramSmoother.step(this._targetParams, this.reducedMotion ? dt * 0.2 : dt);
+    const audio = this._audioReactivity.step(this._audioLevel, dt);
+
+    if (this._colorTarget && this._colorTarget.set) {
+      this._colorTarget.setHex(this._targetParams.color ?? this.theme.core);
+      this._colorCurrent.lerp(this._colorTarget, Math.min(1, dt * 3));
+    }
+
+    const decay = Math.exp(-dt * PULSE_DECAY_PER_SEC);
+    this._pulseNucleus *= decay; this._pulseRibbons *= decay; this._pulseParticles *= decay;
+
+    const sphereUniforms = this._sphere.material.uniforms;
+    sphereUniforms.energy.value = Math.min(1, p.coreEnergy + audio * 0.35 + this._pulseNucleus * 0.4);
+    sphereUniforms.cameraPosWorld.value.copy(this.camera.position);
+    sphereUniforms.coreColor.value.copy(this._colorCurrent);
+    sphereUniforms.uTime.value = nowMs * 0.001;
+    sphereUniforms.circuitActivity.value = p.particleActivity;
+
+    const jitter = this.reducedMotion ? 0 : (p.instability + p.deformation) * 0.05 * Math.sin(nowMs * 0.011);
+    const breathe = 1 + Math.sin(nowMs * 0.001 * (0.6 + p.pulseFreq)) * p.pulseDepth * 0.10
+                      + audio * 0.06 + this._pulseNucleus * 0.14 + jitter;
+    this._sphere.scale.setScalar(breathe);
+    this._wireframe.scale.setScalar(breathe * 1.02);
+    this._wireframe.material.opacity = 0.12 + p.glow * 0.25;
+    this._wireframe.material.color.copy(this._colorCurrent);
+
+    if (!this.reducedMotion) {
+      this._sphere.rotation.y += dt * p.rotSpeed * 0.35;
+      this._wireframe.rotation.y -= dt * p.rotSpeed * 0.25;
+      this._wireframe.rotation.x += dt * p.rotSpeed * 0.12;
+    }
+
+    const nexusPulse = 1 + this._pulseNucleus * 0.7 + audio * 0.25
+                          + Math.sin(nowMs * 0.001 * (1.2 + p.pulseFreq * 1.5)) * p.pulseDepth * 0.18;
+    this._nexusCore.scale.setScalar(nexusPulse);
+    this._nexusHalo.scale.setScalar(nexusPulse * (1.3 + p.glow * 0.4));
+    this._nexusHalo.material.color.copy(this._colorCurrent);
+    this._nexusHalo.material.opacity = 0.18 + p.glow * 0.3;
+    if (!this.reducedMotion) {
+      this._nexusSpokes.rotation.y += dt * (0.15 + p.rotSpeed * 0.4);
+      this._nexusSpokes.rotation.x += dt * 0.06;
+    }
+    this._nexusSpokes.material.opacity = (0.25 + p.glow * 0.4) * (0.6 + this._pulseNucleus * 0.8);
+
+    if (!this.reducedMotion) {
+      for (const r of this._ribbons) {
+        r.group.rotation.y += dt * r.baseSpeed * (0.5 + p.rotSpeed * 2.0 + this._pulseRibbons * 1.4);
+        if (p.instability > 0.01) {
+          r.group.rotation.z += dt * p.instability * 0.15 * Math.sin(nowMs * 0.002 + r.baseSpeed * 20);
+        }
+      }
+    }
+    for (const r of this._ribbons) {
+      r.coreMesh.material.opacity = 0.6 + p.glow * 0.35 + this._pulseRibbons * 0.25;
+      r.haloMesh.material.opacity = 0.16 + p.glow * 0.3 + this._pulseRibbons * 0.25;
+      r.haloMesh.material.color.copy(this._colorCurrent);
+      r.group.visible = this.showOuterRings;
+    }
+
+    this._particles.visible = this.showParticles;
+    if (this.showParticles && !this.reducedMotion) {
+      const posAttr = this._particles.geometry.attributes.position;
+      const t = nowMs * 0.0004;
+      const activity = 0.3 + p.particleActivity + this._pulseParticles * 0.6;
+      for (let i = 0; i < posAttr.count; i++) {
+        const bx = this._particleBase[i * 3], by = this._particleBase[i * 3 + 1], bz = this._particleBase[i * 3 + 2];
+        const wobble = 1 + Math.sin(t * 2 + i * 0.37) * 0.03 * activity + audio * 0.05;
+        posAttr.setXYZ(i, bx * wobble, by * wobble, bz * wobble);
+      }
+      posAttr.needsUpdate = true;
+      this._particles.rotation.y += dt * 0.03 * activity;
+    }
+    this._particles.material.opacity = 0.28 + p.particleActivity * 0.5 + this._pulseParticles * 0.2;
+    this._particles.material.color.copy(this._colorCurrent);
+
+    if (this._floor.visible) {
+      this._floor.material.uniforms.uTime.value = nowMs * 0.001;
+      this._floor.material.uniforms.glowColor.value.copy(this._colorCurrent);
+      this._floor.material.uniforms.uOpacity.value = 0.18 + p.glow * 0.25;
+      if (!this.reducedMotion) this._floor.rotation.z += dt * 0.015;
+    }
+
+    if (this._bloomEnabled && this.composer) {
+      this.composer.render();
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
+    this._raf = requestAnimationFrame((t) => this._tick(t));
+  }
+}
+
+function describePerceptualState(s) {
+  const opText = {
+    offline: 'AI system offline', initializing: 'AI system initializing', idle: 'AI system idle',
+    monitoring: 'AI system monitoring', listening: 'AI system listening',
+    processing: 'AI system processing', responding: 'AI system responding',
+  }[s.systemState] || 'AI system status unknown';
+  const parts = [opText];
+  if (s.systemHealth && s.systemHealth !== 'healthy') parts.push(`health: ${s.systemHealth}`);
+  if (s.alertLevel && s.alertLevel !== 'normal') parts.push(`${s.alertLevel} alert`);
+  return parts.join(' — ');
+}
+
+// ==== deterministic synthetic joint generator (verified, reused) ====
+class SyntheticSource {
+  constructor(seed = 42) { this.rngState = seed; this.frame = 0; this.q = 0.68; }
+  lcg() { this.rngState = (this.rngState * 1664525 + 1013904223) >>> 0; return this.rngState / 0xFFFFFFFF; }
+  nextJoints() {
+    const f = this.frame % 120;
+    const task = f < 40 ? "T1" : (f < 80 ? "T2" : "T3");
+    const target = { T1: 0.72, T2: 0.50, T3: 0.28 }[task];
+    const noise = this.lcg() * 0.05 - 0.025;
+    this.q = Math.max(0.05, Math.min(0.95, this.q + (target - this.q) * 0.10 + noise));
+    const spread = (1.0 - this.q) * 0.3 + 0.05;
+    const joints = [];
+    for (let j = 0; j < 25; j++) {
+      const x = (j * 0.1 + this.lcg() * spread) * spread;
+      const y = (j * 0.05 + this.lcg() * spread) * spread;
+      const z = (j * 0.08 + this.lcg() * spread) * spread;
+      joints.push([x, y, z]);
+    }
+    this.frame += 1;
+    return normaliseJoints(joints, 0);
+  }
+}
+function normaliseJoints(joints, spineIdx = 0) {
+  const [sx, sy, sz] = joints[spineIdx];
+  return joints.map(([x,y,z]) => [x - sx, y - sy, z - sz]);
+}
+
+// ==== HEMM entropy + BNN inference (verified numerically against Python reference) ====
+const EPS = 1e-9, K_SECTORS = 12, VEL_BINS = 16, HEMM_WINDOW_CAP = 5, VEL_MAX = 0.5;
+
+function shannon(dist) {
+  let h = 0;
+  for (const p of dist) if (p > 0) h += -p * Math.log2(p + EPS);
+  return h;
+}
+function sectorIndex(x, y, z) {
+  const az = (Math.atan2(z, x) + Math.PI) / (2.0 * Math.PI);
+  const azS = (((Math.floor(az * 8)) % 8) + 8) % 8;
+  const elS = y < -0.5 ? 0 : (y < 0.5 ? 1 : 2);
+  return (azS * 3 + elS) % K_SECTORS;
+}
+function computeHsp(joints) {
+  const hist = new Array(K_SECTORS).fill(0);
+  for (const [x, y, z] of joints) hist[sectorIndex(x, y, z)] += 1;
+  const total = joints.length;
+  return shannon(hist.map(c => c / total));
+}
+function dist3(a, b) {
+  const dx = b[0]-a[0], dy = b[1]-a[1], dz = b[2]-a[2];
+  return Math.sqrt(dx*dx + dy*dy + dz*dz);
+}
+function computeHteWindowed(frames, velMax = VEL_MAX) {
+  if (frames.length < 2) return 0.0;
+  const binW = velMax / VEL_BINS, nJoints = frames[0].length, nPairs = frames.length - 1;
+  let totalH = 0.0;
+  for (let j = 0; j < nJoints; j++) {
+    const hist = new Array(VEL_BINS).fill(0);
+    for (let w = 1; w < frames.length; w++) {
+      const vel = dist3(frames[w-1][j], frames[w][j]);
+      hist[Math.min(Math.floor(vel / binW), VEL_BINS - 1)] += 1;
+    }
+    totalH += shannon(hist.map(c => c / nPairs));
+  }
+  return totalH / nJoints;
+}
+function computeHinWindowed(frames, velMax = VEL_MAX) {
+  if (frames.length < 2) return 0.0;
+  const binW = velMax / VEL_BINS, nJoints = frames[0].length, nPairs = frames.length - 1;
+  let totalH = 0.0, pairCount = 0;
+  for (let a = 0; a < nJoints; a++) {
+    for (let b = a + 1; b < nJoints; b++) {
+      const hist = new Array(VEL_BINS * VEL_BINS).fill(0);
+      for (let w = 1; w < frames.length; w++) {
+        const velA = dist3(frames[w-1][a], frames[w][a]);
+        const velB = dist3(frames[w-1][b], frames[w][b]);
+        const binA = Math.min(Math.floor(velA / binW), VEL_BINS - 1);
+        const binB = Math.min(Math.floor(velB / binW), VEL_BINS - 1);
+        hist[binA * VEL_BINS + binB] += 1;
+      }
+      totalH += shannon(hist.map(c => c / nPairs));
+      pairCount += 1;
+    }
+  }
+  return pairCount ? totalH / pairCount : 0.0;
+}
+class HEMMExtractor {
+  constructor(velMax = VEL_MAX) { this.velMax = velMax; this.window = []; this.seeded = false; }
+  reset() { this.window = []; this.seeded = false; }
+  compute(prevJoints, currJoints) {
+    if (!this.seeded) { this.window.push(prevJoints.map(p => p.slice())); this.seeded = true; }
+    this.window.push(currJoints.map(p => p.slice()));
+    if (this.window.length > HEMM_WINDOW_CAP) this.window = this.window.slice(-HEMM_WINDOW_CAP);
+    return {
+      h_sp: Math.max(0, computeHsp(currJoints)),
+      h_te: Math.max(0, computeHteWindowed(this.window, this.velMax)),
+      h_in: Math.max(0, computeHinWindowed(this.window, this.velMax)),
+      windowLen: this.window.length,
+    };
+  }
+}
+function sign(x) { return x >= 0 ? 1 : -1; }
+function quantise(x) { return x >= 0.5 ? 1 : -1; }
+function bnnForward(weights, h_sp, h_te, h_in) {
+  const { w1, b1, w2, b2 } = weights;
+  const N_IN = 3, N_HIDDEN = 16, N_OUT = 5;
+  const xBin = [quantise(h_sp), quantise(h_te), quantise(h_in)];
+  const hidden = new Array(N_HIDDEN);
+  for (let j = 0; j < N_HIDDEN; j++) {
+    let s = 0;
+    for (let i = 0; i < N_IN; i++) s += (w1[j][i] === xBin[i]) ? 1 : -1;
+    hidden[j] = sign(s + b1[j]);
+  }
+  const logits = new Array(N_OUT);
+  for (let k = 0; k < N_OUT; k++) {
+    let s = 0;
+    for (let j = 0; j < N_HIDDEN; j++) s += (w2[k][j] === hidden[j]) ? 1 : -1;
+    logits[k] = s + b2[k];
+  }
+  const maxLogit = Math.max(...logits);
+  const expL = logits.map(l => Math.exp(l - maxLogit));
+  const sExp = expL.reduce((a,b) => a+b, 0) || 1.0;
+  const probs = expL.map(e => e / sExp);
+  let state = 1, best = -1;
+  probs.forEach((p, idx) => { if (p > best) { best = p; state = idx + 1; } });
+  let qRaw = 0;
+  probs.forEach((p, idx) => { qRaw += (idx + 1) * p; });
+  qRaw -= 1;
+  const qHci = Math.max(0, Math.min(1, qRaw / (N_OUT - 1)));
+  return { state, q_hci: qHci, logits, probs };
+}
+
+const CANONICAL_WEIGHTS = {"w1": [[-1, -1, 1], [-1, -1, -1], [-1, -1, 1], [1, 1, -1], [1, 1, 1], [-1, -1, 1], [1, 1, 1], [-1, 1, -1], [1, 1, -1], [1, -1, -1], [-1, 1, 1], [1, 1, -1], [1, 1, 1], [1, 1, -1], [-1, -1, -1], [-1, 1, 1]], "b1": [0.3046440598100061, -0.11058861846350798, -0.2842309150808097, -0.22794053371249245, -0.48091525095070603, -0.2220281473645075, -0.16603166252980744, 0.382866115049195, 0.45587807753027376, -0.3073014011157913, 0.37130102977885426, 0.08232294548822638, -0.16331891777536806, -0.185672553182969, -0.37064072696274164, 0.4799701820546691], "w2": [[-1, 1, 1, -1, 1, -1, -1, 1, -1, -1, 1, 1, -1, -1, -1, 1], [1, 1, 1, 1, -1, -1, -1, 1, 1, 1, -1, 1, -1, -1, -1, 1], [1, 1, -1, -1, -1, -1, 1, 1, -1, -1, 1, -1, -1, -1, 1, -1], [-1, -1, 1, 1, 1, 1, -1, -1, -1, 1, -1, 1, 1, 1, 1, -1], [-1, 1, 1, 1, 1, 1, 1, -1, 1, 1, -1, -1, -1, 1, 1, -1]], "b2": [0.07567778638929079, -0.19676549818757116, 0.1450797868066187, 0.16795225782970713, -0.03222690022835201]};
+
+// ==== app wiring ====
+// aura-core-app.js
+// ════════════════════════════════════════════════════════════════════════
+// Standalone HEMM Cognitive Core app driver — the Core as the primary
+// interface, developed as though the globe didn't exist (Section 40 of
+// the governing spec). Reuses everything already built and verified:
+// SyntheticSource/HEMMExtractor/bnnForward (numerically verified against
+// the Python reference), hemm-perceptual-adapter.js's
+// computePerceptualState() (34 tests), AuraOrbEngine (the same renderer
+// the globe's HUD widget uses). Nothing here recomputes HEMM math or
+// duplicates the adapter — this file is only wiring.
+// ════════════════════════════════════════════════════════════════════════
+
+class CoreDriver {
+  constructor(seed) {
+    this.source = new SyntheticSource(seed);
+    this.extractor = new HEMMExtractor();
+    this.prevJoints = null;
+    this.inferenceCount = 0;
+    this.storedUj = 2.0;
+    this.lastResult = null;
+  }
+  tick() {
+    const joints = this.source.nextJoints();
+    if (!this.prevJoints) { this.prevJoints = joints; return null; }
+    const feat = this.extractor.compute(this.prevJoints, joints);
+    this.prevJoints = joints;
+    const bnnRes = bnnForward(CANONICAL_WEIGHTS, feat.h_sp, feat.h_te, feat.h_in);
+    this.inferenceCount += 1;
+    this.storedUj = Math.max(0, this.storedUj + (Math.random() * 0.02) - 0.0304);
+    this.lastResult = {
+      hci: {
+        hsp: feat.h_sp, hte: feat.h_te, hin: feat.h_in,
+        qhci: bnnRes.q_hci, state: bnnRes.state, alert: bnnRes.q_hci < 0.42,
+        probs: bnnRes.probs,
+      },
+      energy: { source: 'thermal', power_uw: 8 + Math.random() * 15, stored_uj: this.storedUj, can_fire: this.storedUj > 0.0304 },
+      inference: { energy_nj: 30.4, count: this.inferenceCount },
+    };
+    return this.lastResult;
+  }
+}
+
+class CoreApp {
+  constructor() {
+    this.driver = new CoreDriver(42);
+    this.userPaused = false;
+    this.hasEverSeenData = false;
+    this._wsTransportError = false;
+    this._hasEverConnectedLive = false;
+    this._backendConnected = false;
+    this._ws = null;
+    this.qhciTrendTracker = new QhciTrendTracker(8);
+    this.staleness = { lastIngestMs: null };
+    this._lastSeenResult = null;
+    this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    this._initOrb();
+    this._initControls();
+    this._tryConnectBackend();
+    this._startSimLoop();
+    this._startStateLoop();
+    this._registerServiceWorker();
+  }
+
+  _initOrb() {
+    const host = document.getElementById('orbHost');
+    this.orb = new AuraOrbEngine(host, {
+      size: 320,
+      reducedMotion: this.reducedMotion,
+      onToggle: (next) => {
+        this.userPaused = (next === 'disabled');
+        document.getElementById('pauseNote').classList.toggle('show', this.userPaused);
+      },
+      onAlertChange: (level) => {
+        const el = document.getElementById('alertBadge');
+        el.textContent = level === 'normal' ? '' : `${level.toUpperCase()} ALERT`;
+        el.classList.toggle('show', level !== 'normal');
+        el.dataset.level = level;
+      },
+      onStateChange: () => {},
+    });
+  }
+
+  _initControls() {
+    const rm = document.getElementById('reducedMotionToggle');
+    rm.checked = this.reducedMotion;
+    rm.addEventListener('change', (e) => {
+      this.reducedMotion = e.target.checked;
+      this.orb.setReducedMotion(this.reducedMotion);
+    });
+    document.getElementById('reconnectBtn').addEventListener('click', () => {
+      if (this._ws) this._ws.close();
+      this._tryConnectBackend();
+    });
+    const diagToggle = document.getElementById('diagToggle');
+    diagToggle.addEventListener('change', (e) => {
+      document.getElementById('diagOutput').style.display = e.target.checked ? 'block' : 'none';
+    });
+    setInterval(() => {
+      if (diagToggle.checked) {
+        document.getElementById('diagOutput').textContent = JSON.stringify(this.orb.getDiagnostics(), null, 2);
+      }
+    }, 500);
+  }
+
+  _startSimLoop() {
+    setInterval(() => {
+      if (this._backendConnected) return; // live backend is authoritative — see aura-m1-globe.html's identical fix
+      const before = this.driver.lastResult;
+      const result = this.driver.tick();
+      if (result) {
+        const magnitude = Math.min(1, 0.15 + Math.abs(result.hci.qhci - (before?.hci?.qhci ?? result.hci.qhci)) * 2);
+        this._updateState(true, magnitude);
+      }
+    }, 500);
+  }
+
+  _startStateLoop() {
+    setInterval(() => { if (!this.userPaused) this._updateState(false, 0); }, 500);
+  }
+
+  _updateState(recentlyFired, pulseMagnitude) {
+    const hubNode = this.driver.lastResult
+      ? { hci: this.driver.lastResult.hci, energy: this.driver.lastResult.energy }
+      : null;
+    if (hubNode) this.hasEverSeenData = true;
+    // Staleness must track when the underlying data object actually
+    // changed, not when this function was last called — this runs
+    // every 500ms regardless (the periodic loop), so timestamping on
+    // every call would make "time since last update" always read ~0
+    // and never actually detect a stalled source.
+    if (this.driver.lastResult !== this._lastSeenResult) {
+      this._lastSeenResult = this.driver.lastResult;
+      this.staleness.lastIngestMs = Date.now();
+    }
+    const backendStatus = document.getElementById('backendStatus').dataset.status;
+    const stalenessSec = this.staleness.lastIngestMs === null ? null : (Date.now() - this.staleness.lastIngestMs) / 1000;
+
+    const perceptualState = computePerceptualState({
+      hubNode, backendStatus, userPaused: this.userPaused,
+      stalenessSec, recentlyFired, hasEverSeenData: this.hasEverSeenData,
+      hasTransportError: this._wsTransportError, trendTracker: this.qhciTrendTracker,
+    });
+    this.orb.setPerceptualState(perceptualState);
+    if (recentlyFired) this.orb.triggerPulse('inference', pulseMagnitude);
+    this._refreshStatusText(perceptualState);
+  }
+
+  _refreshStatusText(s) {
+    document.getElementById('stateLabel').textContent = describeState(s.systemState);
+    document.getElementById('qhciVal').textContent = s.qhci !== null ? s.qhci.toFixed(3) : '—';
+    document.getElementById('healthVal').textContent = s.systemHealth;
+    document.getElementById('healthVal').dataset.health = s.systemHealth;
+    document.getElementById('trendVal').textContent = s.qhciTrend;
+    document.getElementById('confVal').textContent = s.inferenceConfidence !== null ? s.inferenceConfidence.toFixed(2) : 'n/a';
+  }
+
+  // ── Backend WebSocket — identical graceful-fallback pattern to
+  // aura-m1-globe.html, including the confirmed-fixed sim-vs-live race
+  // guard and the transport-error wiring. ────────────────────────────
+  _tryConnectBackend() {
+    const url = document.getElementById('backendUrlInput').value.trim();
+    if (!url) { this._setBackendBanner('offline', 'No backend URL set — running on simulated data.'); return; }
+    this._setBackendBanner('connecting', `Connecting to ${url}…`);
+    try {
+      this._ws = new WebSocket(url);
+      const timeout = setTimeout(() => {
+        if (this._ws && this._ws.readyState !== WebSocket.OPEN) {
+          this._ws.close();
+          this._setBackendBanner('offline', 'Backend did not respond — running on simulated data.');
+        }
+      }, 4000);
+      this._ws.onopen = () => {
+        clearTimeout(timeout);
+        this._backendConnected = true;
+        this._hasEverConnectedLive = true;
+        this._wsTransportError = false;
+        this._setBackendBanner('live', `Live — ${url}`);
+      };
+      this._ws.onmessage = (evt) => {
+        try {
+          const record = JSON.parse(evt.data);
+          if (typeof record.q_hci === 'number') {
+            // NOTE (same honest gap as aura-m1-globe.html): server.py's
+            // real TelemetryRecord has no h_sp/h_te/h_in or softmax
+            // probs — left null/undefined here rather than defaulted
+            // to 0, so the UI correctly shows "n/a" instead of a
+            // fabricated measurement.
+            this.driver.lastResult = {
+              hci: { hsp: null, hte: null, hin: null, qhci: record.q_hci, state: record.state ?? 3, alert: !!record.alert },
+              energy: this.driver.lastResult?.energy ?? { source: 'backend', power_uw: record.power_uw ?? 0, stored_uj: 0, can_fire: true },
+              inference: { energy_nj: record.energy_nj ?? 30.4, count: (this.driver.lastResult?.inference.count ?? 0) + 1 },
+            };
+            this._updateState(true, 0.3);
+          }
+        } catch (e) { /* malformed frame — ignore, keep the connection */ }
+      };
+      this._ws.onclose = () => {
+        this._backendConnected = false;
+        this._setBackendBanner('offline', 'Backend disconnected — running on simulated data.');
+      };
+      this._ws.onerror = () => {
+        // Only escalate to the alarming systemHealth: 'error' state if
+        // a live connection had genuinely been established before and
+        // then broke. A first-attempt failure — by far the common
+        // case, since most people opening this won't have server.py
+        // running yet — is a normal, expected fallback, not a software
+        // error, and should stay calm/offline (matching the banner's
+        // own neutral "did not respond" tone), not jump to an alarming
+        // color. Confirmed by real browser testing: without this
+        // guard, the orb showed violet "error" on ordinary first load
+        // with no backend running at all.
+        if (this._hasEverConnectedLive) this._wsTransportError = true;
+      };
+    } catch (e) {
+      this._setBackendBanner('offline', `Could not connect (${e.message}) — running on simulated data.`);
+    }
+  }
+
+  _setBackendBanner(status, text) {
+    const el = document.getElementById('backendStatus');
+    el.dataset.status = status;
+    el.textContent = text;
+  }
+
+  _registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./service-worker.js').catch((e) => {
+        console.warn('[HEMM Core] service worker registration failed (app still works normally):', e);
+      });
+    }
+  }
+}
+
+function describeState(systemState) {
+  return {
+    offline: 'Offline', initializing: 'Initializing…', idle: 'Idle — monitoring',
+    monitoring: 'Monitoring', listening: 'Listening for backend…',
+    processing: 'Processing', responding: 'Responding',
+  }[systemState] || systemState;
+}
+
+window.addEventListener('DOMContentLoaded', () => { window._hemmCoreApp = new CoreApp(); });
+
+</script>
+</body>
+</html>

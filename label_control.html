@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Aura-M1 — Label Your Session</title>
+<style>
+  body { background:#0B1220; color:#fff; font-family:-apple-system,Segoe UI,Arial,sans-serif;
+         display:flex; flex-direction:column; align-items:center; padding:40px 20px; margin:0; }
+  h1 { font-size:20px; color:#2DD4BF; margin-bottom:4px; }
+  p.sub { color:#8B94A3; font-size:13px; margin-top:0; margin-bottom:20px; text-align:center; max-width:420px; }
+
+  #coverage { width:100%; max-width:420px; margin-bottom:24px; }
+  #coverage-label { font-size:12px; color:#8B94A3; margin-bottom:6px; display:flex; justify-content:space-between; }
+  #coverage-bar { height:8px; background:#1c2740; border-radius:4px; overflow:hidden; }
+  #coverage-fill { height:100%; width:0%; background:#2DD4BF; transition:width .3s ease; }
+
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; width:100%; max-width:420px; }
+  button { font-size:16px; font-weight:600; padding:20px 10px 14px; border-radius:12px; border:none;
+           cursor:pointer; color:#0B1220; transition:transform .08s ease; position:relative; }
+  button:active { transform:scale(0.96); }
+  .focused   { background:#2DD4BF; }
+  .restless  { background:#F5A524; }
+  .overload  { background:#FF6B5B; color:#fff; }
+  .fatigued  { background:#8B94A3; }
+
+  .count { display:block; font-size:12px; font-weight:400; margin-top:6px; opacity:0.75; }
+  .never { animation: pulse 1.6s infinite; box-shadow: 0 0 0 0 rgba(255,255,255,0.5); }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.45); }
+    70%  { box-shadow: 0 0 0 10px rgba(255,255,255,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+  }
+
+  #nudge { max-width:420px; background:#2a2110; border:1px solid #F5A524; color:#F5A524;
+           font-size:13px; padding:14px 16px; border-radius:8px; margin-top:24px; display:none; }
+
+  #log { margin-top:24px; width:100%; max-width:420px; font-size:12px; color:#AEB8C4;
+         max-height:200px; overflow-y:auto; }
+  #log div { padding:6px 0; border-bottom:1px solid #1c2740; }
+  .ok { color:#2DD4BF; font-size:12px; margin-top:16px; opacity:0; transition:opacity .2s; }
+  .err { background:#3a1414; border:1px solid #FF6B5B; color:#FF6B5B; font-size:13px;
+         padding:14px 16px; border-radius:8px; margin-bottom:20px; max-width:420px; display:none; }
+</style>
+</head>
+<body>
+  <h1>How are you doing right now?</h1>
+  <p class="sub">Click whenever you notice your own state. This labels the last ~20 seconds, not just this instant. Try to hit <b>all four</b> at some point, not just one repeatedly.</p>
+
+  <div class="err" id="err">
+    ⚠ This page was opened as a local file, not through the server, so labels can't be sent.
+    Open <code id="correcturl"></code> instead (the run_live.py terminal prints this URL).
+  </div>
+
+  <div id="coverage">
+    <div id="coverage-label"><span>States covered</span><span id="coverage-count">0 / 4</span></div>
+    <div id="coverage-bar"><div id="coverage-fill"></div></div>
+  </div>
+
+  <div class="grid">
+    <button class="focused never" id="btn-focused" onclick="label('focused')">
+      🙂 Focused / Good<span class="count" id="count-focused">not logged yet</span>
+    </button>
+    <button class="restless never" id="btn-spatial_restlessness" onclick="label('spatial_restlessness')">
+      🦵 Restless<span class="count" id="count-spatial_restlessness">not logged yet</span>
+    </button>
+    <button class="overload never" id="btn-cognitive_overload" onclick="label('cognitive_overload')">
+      🤯 Overloaded<span class="count" id="count-cognitive_overload">not logged yet</span>
+    </button>
+    <button class="fatigued never" id="btn-sustained_low_quality" onclick="label('sustained_low_quality')">
+      😴 Fatigued / Low quality<span class="count" id="count-sustained_low_quality">not logged yet</span>
+    </button>
+  </div>
+
+  <div id="nudge"></div>
+  <div class="ok" id="ok">Logged.</div>
+  <div id="log"></div>
+
+<script>
+if (window.location.protocol === 'file:') {
+  document.getElementById('err').style.display = 'block';
+  document.getElementById('correcturl').textContent = 'http://localhost:8765/label_control.html';
+}
+
+const LABELS = ['focused', 'spatial_restlessness', 'cognitive_overload', 'sustained_low_quality'];
+const counts = { focused: 0, spatial_restlessness: 0, cognitive_overload: 0, sustained_low_quality: 0 };
+let lastClickAt = Date.now();
+let sentCount = 0;
+
+function renderCounts() {
+  let covered = 0;
+  for (const l of LABELS) {
+    const el = document.getElementById('count-' + l);
+    const btn = document.getElementById('btn-' + l);
+    if (counts[l] > 0) {
+      el.textContent = counts[l] + ' logged';
+      btn.classList.remove('never');
+      covered += 1;
+    } else {
+      el.textContent = 'not logged yet';
+      btn.classList.add('never');  // keeps pulsing until clicked at least once
+    }
+  }
+  document.getElementById('coverage-count').textContent = covered + ' / 4';
+  document.getElementById('coverage-fill').style.width = (covered / 4 * 100) + '%';
+}
+renderCounts();
+
+// Gentle nag: if 3 minutes pass with no click at all, or with one or
+// more states still completely uncovered, say so on-page AND flash
+// the tab title so it's noticeable even if this tab isn't focused.
+const NUDGE_AFTER_MS = 3 * 60 * 1000;
+const originalTitle = document.title;
+let titleFlashOn = false;
+
+setInterval(() => {
+  const idleFor = Date.now() - lastClickAt;
+  const missing = LABELS.filter(l => counts[l] === 0);
+  const nudge = document.getElementById('nudge');
+
+  if (idleFor > NUDGE_AFTER_MS) {
+    if (missing.length > 0) {
+      nudge.style.display = 'block';
+      nudge.textContent = `⚠ No label in ${Math.round(idleFor / 60000)} min. Still missing: ${missing.join(', ')}. Don't forget to log a state, even a boring one.`;
+    } else {
+      nudge.style.display = 'block';
+      nudge.textContent = `⚠ No label in ${Math.round(idleFor / 60000)} min. How are you doing right now?`;
+    }
+    titleFlashOn = !titleFlashOn;
+    document.title = titleFlashOn ? '⚠ Label me? — Aura-M1' : originalTitle;
+  } else {
+    nudge.style.display = 'none';
+    document.title = originalTitle;
+  }
+}, 5000);
+
+async function label(value) {
+  if (window.location.protocol === 'file:') {
+    alert('This page is open as a local file, so the label cannot be sent.\n\n' +
+          'Open http://localhost:8765/label_control.html instead (with run_live.py running).');
+    return;
+  }
+  try {
+    const resp = await fetch(window.location.origin + '/label?value=' + value, { method: 'POST' });
+    if (!resp.ok) {
+      let detail = 'Server responded ' + resp.status;
+      try {
+        const body = await resp.json();
+        if (body.error) detail = body.error;
+      } catch (_) { /* body wasn't JSON, fall back to the generic message */ }
+      throw new Error(detail);
+    }
+
+    sentCount += 1;
+    counts[value] += 1;
+    lastClickAt = Date.now();
+    document.getElementById('nudge').style.display = 'none';
+    document.title = originalTitle;
+    renderCounts();
+
+    const ok = document.getElementById('ok');
+    ok.textContent = 'Logged. (' + sentCount + ' total this session)';
+    ok.style.color = '#2DD4BF';
+    ok.style.opacity = 1;
+    setTimeout(() => ok.style.opacity = 0, 1200);
+
+    const row = document.createElement('div');
+    const t = new Date().toLocaleTimeString();
+    row.textContent = t + '  —  ' + value;
+    document.getElementById('log').prepend(row);
+  } catch (e) {
+    alert('Label failed to send: ' + e.message +
+          '\n\nMake sure run_live.py is still running in your terminal.');
+  }
+}
+</script>
+</body>
+</html>

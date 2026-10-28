@@ -1,0 +1,216 @@
+{
+  "model_version": "1.0.0",
+  "architecture_version": "3x16x5-xnor-popcount-v1",
+  "hemm_version": "1.0.0",
+  "training_dataset_version": "seeded-placeholder-v1",
+  "qhci_mapping_version": "softmax-weighted-mean-v1",
+  "joint_schema": "25-JOINT-V1",
+  "weight_format": "i8_pm1",
+  "bias_format": "f32",
+  "n_in": 3,
+  "n_hidden": 16,
+  "n_out": 5,
+  "generation_seed": 42,
+  "checksum_algorithm": "fnv1a_32",
+  "checksum": "72fabfe0",
+  "w1": [
+    [
+      -1,
+      -1,
+      1
+    ],
+    [
+      -1,
+      -1,
+      -1
+    ],
+    [
+      -1,
+      -1,
+      1
+    ],
+    [
+      1,
+      1,
+      -1
+    ],
+    [
+      1,
+      1,
+      1
+    ],
+    [
+      -1,
+      -1,
+      1
+    ],
+    [
+      1,
+      1,
+      1
+    ],
+    [
+      -1,
+      1,
+      -1
+    ],
+    [
+      1,
+      1,
+      -1
+    ],
+    [
+      1,
+      -1,
+      -1
+    ],
+    [
+      -1,
+      1,
+      1
+    ],
+    [
+      1,
+      1,
+      -1
+    ],
+    [
+      1,
+      1,
+      1
+    ],
+    [
+      1,
+      1,
+      -1
+    ],
+    [
+      -1,
+      -1,
+      -1
+    ],
+    [
+      -1,
+      1,
+      1
+    ]
+  ],
+  "b1": [
+    0.3046440598100061,
+    -0.11058861846350798,
+    -0.2842309150808097,
+    -0.22794053371249245,
+    -0.48091525095070603,
+    -0.2220281473645075,
+    -0.16603166252980744,
+    0.382866115049195,
+    0.45587807753027376,
+    -0.3073014011157913,
+    0.37130102977885426,
+    0.08232294548822638,
+    -0.16331891777536806,
+    -0.185672553182969,
+    -0.37064072696274164,
+    0.4799701820546691
+  ],
+  "w2": [
+    [
+      -1,
+      1,
+      1,
+      -1,
+      1,
+      -1,
+      -1,
+      1,
+      -1,
+      -1,
+      1,
+      1,
+      -1,
+      -1,
+      -1,
+      1
+    ],
+    [
+      1,
+      1,
+      1,
+      1,
+      -1,
+      -1,
+      -1,
+      1,
+      1,
+      1,
+      -1,
+      1,
+      -1,
+      -1,
+      -1,
+      1
+    ],
+    [
+      1,
+      1,
+      -1,
+      -1,
+      -1,
+      -1,
+      1,
+      1,
+      -1,
+      -1,
+      1,
+      -1,
+      -1,
+      -1,
+      1,
+      -1
+    ],
+    [
+      -1,
+      -1,
+      1,
+      1,
+      1,
+      1,
+      -1,
+      -1,
+      -1,
+      1,
+      -1,
+      1,
+      1,
+      1,
+      1,
+      -1
+    ],
+    [
+      -1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      -1,
+      1,
+      1,
+      -1,
+      -1,
+      -1,
+      1,
+      1,
+      -1
+    ]
+  ],
+  "b2": [
+    0.07567778638929079,
+    -0.19676549818757116,
+    0.1450797868066187,
+    0.16795225782970713,
+    -0.03222690022835201
+  ],
+  "note": "Weights are deterministic placeholders (LCG seed=42), NOT trained on real HCI participant data. This is the single canonical source of truth for Python/Rust/firmware \u2014 none of them should independently regenerate weights from a seed anymore. Retraining replaces this file's w1/b1/w2/b2 and bumps model_version; the generation scheme documented in this script's docstring stays fixed regardless, so the checksum verification mechanism keeps working."
+}
