@@ -20,6 +20,7 @@ class WindowsSpeechAndClipboard(unittest.TestCase):
     def test_speech_goes_through_powershell_on_stdin(self):
         calls = []
         with mock.patch.object(sys, "platform", "win32"), \
+             mock.patch.dict(os.environ, {"AURA_VOICE_ENGINE": "espeak"}), \
              mock.patch("shutil.which", side_effect=lambda n: "C:\\ps.exe" if n == "powershell" else None), \
              mock.patch("subprocess.run", side_effect=lambda cmd, **kw: calls.append((cmd, kw))):
             self.assertTrue(voice._default_speak("Time for a short reset."))

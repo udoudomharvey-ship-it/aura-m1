@@ -9,17 +9,16 @@ case "${1:-help}" in
     shift; [ "$1" = "--voice" ] && export AURA_VOICE=1
     export AURA_BNN_MODEL="$PWD/models/demo_placeholder_bnn.json"
     echo "DEMO MODE: scripted scenarios, placeholder model. Not a reading of a real person."
-    echo "Open http://localhost:8765/aura.html   (classic view: /dashboard.html)"
+    echo "Open http://localhost:8765/dashboard.html"
     exec $PY dashboard_server.py ;;
   live)   # real webcam, local only
     shift; [ "$1" = "--voice" ] && export AURA_VOICE=1
     [ -f escalation_config.json ] || echo "(escalation off: copy escalation_config.example.json to escalation_config.json to configure)"
     echo "LIVE MODE: webcam. Detection is NOT validated on real people yet."
-    echo "Open http://localhost:8765/aura.html   (classic view: /dashboard.html)"
+    echo "Open http://localhost:8765/dashboard.html"
     exec $PY run_live.py ;;
   voice)  AURA_VOICE=1 exec $PY demo_voice.py ;;
   chat)   exec $PY tools/talk.py ;;
-  listen) exec $PY tools/listen.py ;;
   doctor) exec $PY tools/voice_selftest.py --no-claude ;;
   test)   exec $PY -m unittest discover -s aura_sdk_tests -t . ;;
   *) cat <<'H'
@@ -27,7 +26,6 @@ case "${1:-help}" in
 ./aura live [--voice]   real webcam session (needs opencv + mediapipe)
 ./aura voice            hear the four spoken nudges without any camera
 ./aura chat             type to Aura, hear replies (needs API key)
-./aura listen           say 'Hey Aura' and talk (run ./install_listen.sh once)
 ./aura doctor           check speaker and voice setup
 ./aura test             run the automated tests
 H

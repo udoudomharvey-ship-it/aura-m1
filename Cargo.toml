@@ -8,7 +8,7 @@ resolver = "2"
 
 [workspace.package]
 version     = "0.1.0"
-authors     = ["Harvey Frederick Udoudom <udoudomharvey@gmail.com>"]
+authors     = ["GreyMatter Inc."]
 edition     = "2021"
 description = "Aura-M1 Sub-Threshold Kinetic Micro-Controller"
 license     = "Proprietary"
